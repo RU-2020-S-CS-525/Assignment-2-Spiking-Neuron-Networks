@@ -28,6 +28,12 @@ class feedForward(object):
         #OUT
         #np.ndarray spikeList, dtype = np.bool, shape = (n, ): True: fire; False: not fire
         self.forward = self._getForwardFunc()
+        ####for ease of understanding, one may assume having a member function layer.forward(tempCurrentList) defined below
+        ####    def forward(self, tempCurrentList):
+        ####        spikeList = np.empty((self.size, ), dtype = np.bool)
+        ####        for i, neuron in enumerate(self.neuronList):
+        ####            spikeList[i] = neuron.forward(tempCurrentList[i])
+        ####        return spikeList
         return
 
     def _getForwardFunc(self):
