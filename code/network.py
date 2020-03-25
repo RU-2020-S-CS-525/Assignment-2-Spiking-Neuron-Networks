@@ -19,11 +19,11 @@ class supervised(object):
 		#do some init
 		return weight
 
-	def forward(self, iData):
+	def forward(self, iData, supervisedIData):
 		for i in range(layerNum - 1):
 			oData = layerList[i].forward(iData)
 			iData = np.matmul(oData, weightList[i])
-		oData = layerList[-1].forward(iData)
+		oData = layerList[-1].forward(iData, supervisedIData)
 		return oData
 
 	def update(self):
