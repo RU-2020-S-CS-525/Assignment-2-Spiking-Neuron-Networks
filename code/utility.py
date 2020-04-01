@@ -22,7 +22,7 @@ def plotNeuron(currentList, voltageList, spikeList, dt = 0.5, fn_save = None):
         point.set_label('spiking indicator')
     plt.xlabel('time (msec)')
     plt.ylabel('voltage (mV)')
-    plt.legend(loc = 5)
+    plt.legend(loc = 0)
     plt.title('membrane potential and spiking behavior')
     plt.tight_layout()
     if fn_save is not None:
@@ -34,7 +34,7 @@ def plotNeuron(currentList, voltageList, spikeList, dt = 0.5, fn_save = None):
         line.set_label('neuron ' + str(i))
     plt.xlabel('time (msec)')
     plt.ylabel('voltage (mV)')
-    plt.legend(loc = 5)
+    plt.legend(loc = 0)
     plt.title('input currents')
     plt.tight_layout()
     if fn_save is not None:
