@@ -1,11 +1,11 @@
 import numpy as np
 
-from utility import plotNeuron
+from utility import plotNeuron, plotSpike
 
 class LIF(object):
     #leaky integrate-and-fire model
     #C_m \frac{dV}{dt} = I(t) - frac{V_m (t)}{R_m}
-    def __init__(self, capitance = 1, resistance = 20, vRest = 0, vThreshold = 15, dt = 0.5):
+    def __init__(self, capitance = 1, resistance = 20, vRest = 0, vThreshold = 1, dt = 0.5):
         #np.float16 capitance: C_m in μF
         #np.float16 resistance: R_m in kΩ
         #np.float16 vRest: rest voltage V_r in mV
@@ -137,4 +137,4 @@ if __name__ == '__main__':
     for i in range(stepNum):
         spikeList[i, 0] = neuron.forward(currentList[i, 0])
         voltageList[i, 0] = neuron.tempVoltage
-    plotNeuron(currentList, voltageList, spikeList)
+    plotNeuron(voltageList, spikeList, currentList)

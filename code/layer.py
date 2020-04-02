@@ -2,7 +2,32 @@ import numpy as np
 
 from neuron import LIF, Izhikevich
 
-from utility import plotNeuron
+from utility import plotNeuron, plotSpike
+
+
+class poissonInput(object):
+    #fire with probability proportion to input
+    def __init__(self, size, fMin = 10, fMax = 200, dt = 0.5):
+        super(poissonInput, self).__init__()
+        self.size = size
+        self.fMin = np.float16(fMin)
+        self.fMax = np.float16(fMax)
+        self.dt = dt
+
+        self.pMin = self.fMin / 1000 * self.dt
+        self.pMax = self.fMax / 1000 * self.dt
+        self.pDiff = self.pMax - self.pMin
+    
+    def forward(self, iData):
+        tempState = np.random.rand(self.size)
+        tempThreshold = iData * self.pDiff + self.pMin
+        spikeList = tempState <= tempThreshold
+        return spikeList
+
+    def getTempVoltageList(self):
+        return np.empty(self.size, dtype = np.float16)
+
+
 
 class feedForward(object):
     #vanilla feedForward layer
@@ -217,14 +242,16 @@ class supervisedOutput(object):
 
 class synapseLayer(object):
     #translate presynapse spike to postsynapse input current
-    def __init__(self, prevSize, postSize, response = 40):
+    def __init__(self, prevSize, postSize, response = 1, dt = 0.5):
         #int prevSize: presynapse layer size
         #int postSize: postsynapse layer size
         #np.float16 response: input current for a spike
+        #np.float16 dt: simulation step size in msec
         super(synapseLayer, self).__init__()
         self.prevSize = prevSize
         self.postSize = postSize
-        self.response = np.float16(response)
+        self.response = np.float16(response) / dt
+        self.dt = dt
 
         #np.ndarray weight, dtype = np.float16, shape = (2, prevSize, postSize): excitatory and inhibitatory synapses.
         self.weight = self._initWeight()
@@ -234,9 +261,9 @@ class synapseLayer(object):
     def _initWeight(self):
         #OUT
         #np.ndarray weight, dtype = np.float16, shape = (2, prevSize, postSize): excitatory and inhibitatory synapses.
-        self.weight = np.abs(np.random.normal(size = (2, self.prevSize, self.postSize))).astype(np.float16)
+        self.weight = np.sort(np.abs(np.random.normal(size = (2, self.prevSize, self.postSize))).astype(np.float16), axis = 0)
         self.normalize()
-        self.weight[1] = -1 * self.weight[1]
+        self.weight[0] = -1 * self.weight[0]
         return self.weight
 
 
@@ -252,26 +279,24 @@ class synapseLayer(object):
         #OUT
         #np.ndarray tempCurrentList, dtype = np.float16, shape = (postSize, ): n different input currents
         tempWeight = self.weight[0] + self.weight[1]
-        unweightedInput = self.response * spikeList
+        unweightedInput = self.response * np.asarray(spikeList, dtype = np.float16)
+        # print('here')
+        # print(self.response)
+        # print(spikeList)
+        # print(np.asarray(spikeList, dtype = np.float16))
+        # print(unweightedInput)
         tempCurrentList = np.matmul(spikeList.reshape((1, self.prevSize)), tempWeight).reshape(self.postSize)
         return tempCurrentList
-        
 
 
 
 if __name__ == '__main__':
-    stepNum = 500
-    layerSize = 3
-    currentList = np.ones((stepNum, layerSize), dtype = np.float16)
-    currentList[:, 0] = 0.3
-    currentList[:, 1] = 0.5
-    currentList[:, 2] = 0.7
-    supervisedCurrentList = np.ones((stepNum, ), dtype = np.float16) * 0.3
-    supervisedCurrentList[: stepNum // 2] = 0
-    voltageList = np.empty_like(currentList, dtype = np.float16)
-    spikeList = np.empty_like(voltageList, dtype = np.bool)
-    layer = supervisedOutput(layerSize, neuronClass = LIF, fastFlag = 2)
+    stepNum = 20000
+    layerSize = 2
+    iData = np.array(range(2), dtype = np.float16)
+    spikeList = np.empty((stepNum, layerSize), dtype = np.bool)
+    layer = poissonInput(layerSize, fMin = 10, fMax = 200)
     for i in range(stepNum):
-        spikeList[i] = layer.forward(currentList[i], supervisedCurrentList[i])
-        voltageList[i] = layer.getTempVoltageList()
-    plotNeuron(currentList, voltageList, spikeList)
+        spikeList[i] = layer.forward(iData)
+    print(np.sum(spikeList, axis = 0))
+    plotSpike(spikeList)
