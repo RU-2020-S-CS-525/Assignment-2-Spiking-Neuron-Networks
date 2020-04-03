@@ -242,7 +242,7 @@ class supervisedOutput(object):
 
 class synapseLayer(object):
     #translate presynapse spike to postsynapse input current
-    def __init__(self, prevSize, postSize, response = 1, dt = 0.5):
+    def __init__(self, prevSize, postSize, response = 1, learningRate = 1, dt = 0.5):
         #int prevSize: presynapse layer size
         #int postSize: postsynapse layer size
         #np.float16 response: input current for a spike
@@ -251,11 +251,11 @@ class synapseLayer(object):
         self.prevSize = prevSize
         self.postSize = postSize
         self.response = np.float16(response) / dt
+        self.learningRate = np.float16(learningRate)
         self.dt = dt
 
         #np.ndarray weight, dtype = np.float16, shape = (2, prevSize, postSize): excitatory and inhibitatory synapses.
         self.weight = self._initWeight()
-        
         return
 
     def _initWeight(self):
@@ -287,6 +287,18 @@ class synapseLayer(object):
         # print(unweightedInput)
         tempCurrentList = np.matmul(spikeList.reshape((1, self.prevSize)), tempWeight).reshape(self.postSize)
         return tempCurrentList
+
+    def ojaUpdate(self, prevSpikeFrq, postSpikeFrq):
+        corrFrq = np.matmul(prevSpikeFrq.reshape(-1, 1), postSpikeFrq.reshape(1, -1))
+        postSqFrq = np.square(postSpikeFrq)
+        dW = np.empty_like(self.weight, dtype = np.float16)
+        for j in range(self.prevSize):
+            for i in range(self.postSize):
+                dW[1, j, i] = self.learningRate * (corrFrq[j, i] - self.weight[1, j, i] * postSqFrq[i])
+                dW[0, j, i] = self.learningRate * (self.weight[0, j, i] * postSqFrq[i] + corrFrq[j, i])
+        self.weight = self.weight + dW
+        self.normalize()
+        return
 
 
 

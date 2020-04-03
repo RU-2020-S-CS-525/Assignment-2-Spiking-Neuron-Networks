@@ -59,11 +59,18 @@ class supervised(object):
             self.__forwardDebug(iData, supervisedIData, stepIdx)
         return self.spikeList[-1]
 
-    def update(self):
-        pass
-
     def predict(self, iData, time):
         return self.forward(iData, None, time)
+
+    def ojaUpdate(self, time):
+        for i in range(self.layerNum):
+            prevSpike = self.spikeList[i]
+            postSpike = self.spikeList[i + 1]
+            prevSpikeFrq = np.sum(prevSpike, axis = 0).astype(np.float16) / time
+            postSpikeFrq = np.sum(postSpike, axis = 0).astype(np.float16) / time
+            self.synapseLayerList[i].ojaUpdate(prevSpikeFrq, postSpikeFrq)
+        return
+
 
 if __name__ == '__main__':
     neuronLayerList = []
@@ -76,10 +83,21 @@ if __name__ == '__main__':
     print(iData)
     print(supervisedIData)
 
-    stepNum = 1000
-    network._forwardDebug(iData, supervisedIData, stepNum)
-    for i in range(len(neuronLayerList) - 1):
-        print(network.synapseLayerList[i].weight[0] + network.synapseLayerList[i].weight[1])
-    for i in range(len(neuronLayerList)):
-        plotNeuron(network.votageList[i], network.spikeList[i], network.currentList[i])
+    time = 1000
+    for iters in range(20):
+        spike = network.forward(iData, supervisedIData, time)
+        print(np.sum(spike))
+        # for i in range(len(neuronLayerList) - 1):
+        #     print(network.synapseLayerList[i].weight[0] + network.synapseLayerList[i].weight[1])
+        for i in range(len(neuronLayerList)):
+            # plotNeuron(network.votageList[i], network.spikeList[i], network.currentList[i])
+            plotSpike(network.spikeList[i])
+        print('prev')
+        for i in range(len(network.synapseLayerList)):
+            print(network.synapseLayerList[i].weight)
+        network.ojaUpdate(time)
+        print('post')
+        for i in range(len(network.synapseLayerList)):
+            print(network.synapseLayerList[i].weight)
+
 
