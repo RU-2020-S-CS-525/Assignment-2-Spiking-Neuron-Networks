@@ -1,314 +1,207 @@
 import numpy as np
 
-from neuron import LIF, Izhikevich
-
-from utility import plotNeuron, plotSpike
-
+from utility import *
 
 class poissonInput(object):
     #fire with probability proportion to input
-    def __init__(self, size, fMin = 10, fMax = 200, dt = 0.5):
+    def __init__(self, size, fMin = 50, fMax = 100, dt = 0.5):
+        #IN
+        #int size: number of neurons
+        #np.float32 fMin: mean firing rate with input 0, in Hz
+        #np.float32 fMax: mean firing rate with input 1, in Hz
+        #np.float32 dt: simulation step size in msec
         super(poissonInput, self).__init__()
         self.size = size
-        self.fMin = np.float16(fMin)
-        self.fMax = np.float16(fMax)
+        self.fMin = np.float32(fMin)
+        self.fMax = np.float32(fMax)
         self.dt = dt
 
+        #np.float32 pMin: firing probability with input 0
+        #np.float32 pMax: firing probability with input 1
+        #np.float32 pDiff: firing probability range
         self.pMin = self.fMin / 1000 * self.dt
         self.pMax = self.fMax / 1000 * self.dt
         self.pDiff = self.pMax - self.pMin
+        return
     
-    def forward(self, iData):
+    def forward(self, iData, *supervisedCurrentList):
+        #generate input spikes
+        #IN
+        #np.ndarray iData, dtype = np.float32, shape = (n, ): n different inputs
+        #OUT
+        #np.ndarray spikeList, dtype = np.bool, shape = (n, ): True: fire; False: not fire
         tempState = np.random.rand(self.size)
         tempThreshold = iData * self.pDiff + self.pMin
         spikeList = tempState <= tempThreshold
         return spikeList
 
-    def getTempVoltageList(self):
-        return np.empty(self.size, dtype = np.float16)
-
-
-
-class feedForward(object):
-    #vanilla feedForward layer
-    def __init__(self, size, neuronClass = LIF, neuronConfig = None, dt = 0.5, fastFlag = 0):
+class forwardLIF(object):
+    #feedForward LIF layer
+    def __init__(self, size, capitance = 1, resistance = 20, vRest = 0, vThreshold = 25, dt = 0.5):
         #int size: number of neurons
-        #neuron neuronClass: model of neuron
-        #dict neuronConfig: configuration of a neuron
-        #np.float16 dt: simulation step size in msec
-        #bool fastFlag: 0: no fast computing; 1: intergrate neurons into the layer; 2: intergrate uniformed neurons into the layer
-        super(feedForward, self).__init__()
+        #np.float32 capitance: C_m in μF
+        #np.float32 resistance: R_m in kΩ
+        #np.float32 vRest: rest voltage V_r in mV
+        #np.float32 vThreshold: threshold voltage V_t in mV
+        #np.float32 dt: simulation step size in msec
+        super(forwardLIF, self).__init__()
         self.size = size
-        self.neuronClass = neuronClass
-        self.neuronConfig = dict() if neuronConfig is None else neuronConfig
-        self.dt = dt
-        self.fastFlag = fastFlag
+        self.capitance = np.float32(capitance)
+        self.resistance = np.float32(resistance)
+        self.vThreshold = np.float32(vThreshold)
+        self.vRest = np.float32(vRest)
+        self.dt = np.float32(dt)
 
-        #list neuronList: neurons in the layer
-        self.neuronList = [self.neuronClass(**self.neuronConfig) for i in range(self.size)]
+        #np.ndarray tempVoltageList, dtype = np.float32, shape = (n, ): n different membrance potential in mV
+        self.tempVoltageList = np.full(self.size, self.vRest, dtype = np.float32)
 
-        #function forward:
-        #IN
-        #np.ndarray tempCurrentList, dtype = np.float16, shape = (n, ): n different input currents
-        #OUT
-        #np.ndarray spikeList, dtype = np.bool, shape = (n, ): True: fire; False: not fire
-        self.forward = self._getForwardFunc()
-        ####for ease of understanding, one may assume having a member function layer.forward(tempCurrentList) defined below
-        ####    def forward(self, tempCurrentList):
-        ####        spikeList = np.empty((self.size, ), dtype = np.bool)
-        ####        for i, neuron in enumerate(self.neuronList):
-        ####            spikeList[i] = neuron.forward(tempCurrentList[i])
-        ####        return spikeList
+        #pre-computing for fast computing
+        self.factor1 = self.dt / self.capitance
+        self.factor2 = 1 - self.factor1 / self.resistance
         return
 
-    def _getForwardFunc(self):
-        #OUT
-        #function forward
-        if self.neuronClass is LIF:
-            if self.fastFlag == 2:
-                self._tempVoltageList = np.full((self.size, ), self.neuronList[0].tempVoltage, dtype = np.float16)
-                neuronForwardFunc = self.neuronList[0].getSimpleFastForwardFunc()
-                def forwardFunc(tempCurrentList):
-                    #IN
-                    #np.ndarray tempCurrentList, dtype = np.float16, shape = (n, ): n different input currents
-                    #OUT
-                    #np.ndarray spikeList, dtype = np.bool, shape = (n, ): True: fire; False: not fire
-                    self._tempVoltageList, spikeList = neuronForwardFunc(tempCurrentList, self._tempVoltageList)
-                    return spikeList
-                return forwardFunc
-
-            elif self.fastFlag == 1:
-                self._tempVoltageList = np.array([self.neuronList[i].tempVoltage for i in range(self.size)], dtype = np.float16)
-                factor1List = np.array([self.neuronList[i].factor1 for i in range(self.size)], dtype = np.float16)
-                factor2List = np.array([self.neuronList[i].factor2 for i in range(self.size)], dtype = np.float16)
-                vThresholdList = np.array([self.neuronList[i].vThreshold for i in range(self.size)], dtype = np.float16)
-                vRestList = np.array([self.neuronList[i].vRest for i in range(self.size)], dtype = np.float16)
-                neuronForwardFunc = self.neuronList[0].getFastForwardFunc(factor1List, factor2List, vThresholdList, vRestList)
-                def forwardFunc(tempCurrentList):
-                    #IN
-                    #np.ndarray tempCurrentList, dtype = np.float16, shape = (n, ): n different input currents
-                    #OUT
-                    #np.ndarray spikeList, dtype = np.bool, shape = (n, ): True: fire; False: not fire
-                    self._tempVoltageList, spikeList = neuronForwardFunc(tempCurrentList, self._tempVoltageList)
-                    return spikeList
-                return forwardFunc
-
-            else:
-                self.fastFlag = 0
-                def forwardFunc(tempCurrentList):
-                    #IN
-                    #np.ndarray tempCurrentList, dtype = np.float16, shape = (n, ): n different input currents
-                    #OUT
-                    #np.ndarray spikeList, dtype = np.bool, shape = (n, ): True: fire; False: not fire
-                    spikeList = np.empty((self.size, ), dtype = np.bool)
-                    for i, neuron in enumerate(self.neuronList):
-                        spikeList[i] = neuron.forward(tempCurrentList[i])
-                    return spikeList
-                return forwardFunc
-
-        else:
-            self.fastFlag = 0
-            def forwardFunc(tempCurrentList):
-                #IN
-                #np.ndarray tempCurrentList, dtype = np.float16, shape = (n, ): n different input currents
-                #OUT
-                #np.ndarray spikeList, dtype = np.bool, shape = (n, ): True: fire; False: not fire
-                spikeList = np.empty((self.size, ), dtype = np.bool)
-                for i, neuron in enumerate(self.neuronList):
-                    spikeList[i] = neuron.forward(tempCurrentList[i])
-                return spikeList
-            return forwardFunc
-
-    def getTempVoltageList(self):
-        #OUT
-        #np.ndarray tempVoltageList, dtype = np.float16, shape = (n, ): n different membrance potential in mV
-        if self.fastFlag == 1 or self.fastFlag == 2:
-            return self._tempVoltageList
-        else:
-            self._tempVoltageList = np.array([self.neuronList[i].tempVoltage for i in range(self.size)], dtype = np.float16)
-            return self._tempVoltageList
-
-
-class supervisedOutput(object):
-    #feedForward layer with an extra supervised input 
-    def __init__(self, size, neuronClass = LIF, neuronConfig = None, dt = 0.5, fastFlag = 0):
-        #int size: number of neurons
-        #neuron neuronClass: model of neuron
-        #dict neuronConfig: configuration of a neuron
-        #np.float16 dt: simulation step size in msec
-        #bool fastFlag: 0: no fast computing; 1: intergrate neurons into the layer; 2: intergrate uniformed neurons into the layer
-        super(supervisedOutput, self).__init__()
-        self.size = size
-        self.neuronClass = neuronClass
-        self.neuronConfig = dict() if neuronConfig is None else neuronConfig
-        self.dt = dt
-        self.fastFlag = fastFlag
-
-        #list neuronList: neurons in the layer
-        self.neuronList = [self.neuronClass(**self.neuronConfig) for i in range(self.size)]
-
-        #function forward:
+    def forward(self, tempCurrentList, supervisedCurrentList):
+        #generate spikes given injected currents
         #IN
-        #np.ndarray tempCurrentList, dtype = np.float16, shape = (n, ): n different input currents
+        #np.ndarray tempCurrentList, dtype = np.float32, shape = (n, ): n different input currents in μA
         #OUT
         #np.ndarray spikeList, dtype = np.bool, shape = (n, ): True: fire; False: not fire
-        self.forward = self._getForwardFunc()
-        ####for ease of understanding, one may assume having a member function layer.forward(tempCurrentList, supervisedCurrentList) defined below
-        ####    def forward(self, tempCurrentList, supervisedCurrentList):
-        ####        tempCurrentList = tempCurrentList + supervisedCurrentList
-        ####        spikeList = np.empty((self.size, ), dtype = np.bool)
-        ####        for i, neuron in enumerate(self.neuronList):
-        ####            spikeList[i] = neuron.forward(tempCurrentList[i])
-        ####        return spikeList
+        self.tempVoltageList = self.factor1 * tempCurrentList + self.tempVoltageList * self.factor2
+        spikeList = self.tempVoltageList >= self.vThreshold
+        self.tempVoltageList[spikeList] = self.vRest
+        return spikeList
+
+
+class supervisedLIF(object):
+    #feedForward LIF layer with supervised input
+    def __init__(self, size, capitance = 1, resistance = 20, vRest = 0, vThreshold = 25, dt = 0.5):
+        #int size: number of neurons
+        #np.float32 capitance: C_m in μF
+        #np.float32 resistance: R_m in kΩ
+        #np.float32 vRest: rest voltage V_r in mV
+        #np.float32 vThreshold: threshold voltage V_t in mV
+        #np.float32 dt: simulation step size in msec
+        super(supervisedLIF, self).__init__()
+        self.size = size
+        self.capitance = np.float32(capitance)
+        self.resistance = np.float32(resistance)
+        self.vThreshold = np.float32(vThreshold)
+        self.vRest = np.float32(vRest)
+        self.dt = np.float32(dt)
+
+        #np.ndarray tempVoltageList, dtype = np.float32, shape = (n, ): n different membrance potential in mV
+        self.tempVoltageList = np.full(self.size, self.vRest, dtype = np.float32)
+
+        #pre-computing for fast computing
+        self.factor1 = self.dt / self.capitance
+        self.factor2 = 1 - self.factor1 / self.resistance
         return
 
-    def _getForwardFunc(self):
+    def forward(self, tempCurrentList, supervisedCurrentList = None):
+        #generate spikes given injected currents
+        #IN
+        #np.ndarray tempCurrentList, dtype = np.float32, shape = (n, ): n different input currents in μA
+        #np.ndarray supervisedCurrentList, dtype = np.float32, shape = (n, ): n different input currents in μA
         #OUT
-        #function forward
-        if self.neuronClass is LIF:
-            if self.fastFlag == 2:
-                self._tempVoltageList = np.full((self.size, ), self.neuronList[0].tempVoltage, dtype = np.float16)
-                neuronForwardFunc = self.neuronList[0].getSimpleFastForwardFunc()
-                def forwardFunc(tempCurrentList, supervisedCurrentList):
-                    #IN
-                    #np.ndarray tempCurrentList, dtype = np.float16, shape = (n, ): n different input currents
-                    #np.ndarray supervisedCurrentList, dtype = np.float16, shape = (n, ): n different supervised input
-                    #OUT
-                    #np.ndarray spikeList, dtype = np.bool, shape = (n, ): True: fire; False: not fire
-                    tempCurrentList = tempCurrentList + supervisedCurrentList
-                    self._tempVoltageList, spikeList = neuronForwardFunc(tempCurrentList, self._tempVoltageList)
-                    return spikeList
-                return forwardFunc
-
-            elif self.fastFlag == 1:
-                self._tempVoltageList = np.array([self.neuronList[i].tempVoltage for i in range(self.size)], dtype = np.float16)
-                factor1List = np.array([self.neuronList[i].factor1 for i in range(self.size)], dtype = np.float16)
-                factor2List = np.array([self.neuronList[i].factor2 for i in range(self.size)], dtype = np.float16)
-                vThresholdList = np.array([self.neuronList[i].vThreshold for i in range(self.size)], dtype = np.float16)
-                vRestList = np.array([self.neuronList[i].vRest for i in range(self.size)], dtype = np.float16)
-                neuronForwardFunc = self.neuronList[0].getFastForwardFunc(factor1List, factor2List, vThresholdList, vRestList)
-                def forwardFunc(tempCurrentList):
-                    #IN
-                    #np.ndarray tempCurrentList, dtype = np.float16, shape = (n, ): n different input currents
-                    #np.ndarray supervisedCurrentList, dtype = np.float16, shape = (n, ): n different supervised input
-                    #OUT
-                    #np.ndarray spikeList, dtype = np.bool, shape = (n, ): True: fire; False: not fire
-                    tempCurrentList = tempCurrentList + supervisedCurrentList
-                    self._tempVoltageList, spikeList = neuronForwardFunc(tempCurrentList, self._tempVoltageList)
-                    return spikeList
-                return forwardFunc
-
-            else:
-                self.fastFlag = 0
-                def forwardFunc(tempCurrentList, supervisedCurrentList):
-                    #IN
-                    #np.ndarray tempCurrentList, dtype = np.float16, shape = (n, ): n different input currents
-                    #np.ndarray supervisedCurrentList, dtype = np.float16, shape = (n, ): n different supervised input
-                    #OUT
-                    #np.ndarray spikeList, dtype = np.bool, shape = (n, ): True: fire; False: not fire
-                    tempCurrentList = tempCurrentList + supervisedCurrentList
-                    spikeList = np.empty((self.size, ), dtype = np.bool)
-                    for i, neuron in enumerate(self.neuronList):
-                        spikeList[i] = neuron.forward(tempCurrentList[i])
-                    return spikeList
-                return forwardFunc
-
-        else:
-            self.fastFlag = 0
-            def forwardFunc(tempCurrentList, supervisedCurrentList = None):
-                #IN
-                #np.ndarray tempCurrentList, dtype = np.float16, shape = (n, ): n different input currents
-                #np.ndarray supervisedCurrentList, dtype = np.float16, shape = (n, ): n different supervised input
-                #OUT
-                #np.ndarray spikeList, dtype = np.bool, shape = (n, ): True: fire; False: not fire
-                if supervisedCurrentList is not None:
-                   tempCurrentList = tempCurrentList + supervisedCurrentList
-                spikeList = np.empty((self.size, ), dtype = np.bool)
-                for i, neuron in enumerate(self.neuronList):
-                    spikeList[i] = neuron.forward(tempCurrentList[i])
-                return spikeList
-            return forwardFunc
-
-    def getTempVoltageList(self):
-        #OUT
-        #np.ndarray tempVoltageList, dtype = np.float16, shape = (n, ): n different membrance potential in mV
-        if self.fastFlag == 1 or self.fastFlag == 2:
-            return self._tempVoltageList
-        else:
-            self._tempVoltageList = np.array([self.neuronList[i].tempVoltage for i in range(self.size)], dtype = np.float16)
-            return self._tempVoltageList
-
+        #np.ndarray spikeList, dtype = np.bool, shape = (n, ): True: fire; False: not fire
+        if supervisedCurrentList is not None:
+            tempCurrentList = tempCurrentList + supervisedCurrentList
+        self.tempVoltageList = self.factor1 * tempCurrentList + self.tempVoltageList * self.factor2
+        spikeList = self.tempVoltageList >= self.vThreshold
+        self.tempVoltageList[spikeList] = self.vRest
+        return spikeList
 
 
 class synapseLayer(object):
     #translate presynapse spike to postsynapse input current
-    def __init__(self, prevSize, postSize, response = 1, learningRate = 1, dt = 0.5):
+    def __init__(self, prevSize, postSize, tau = 10, dt = 0.5):
         #int prevSize: presynapse layer size
         #int postSize: postsynapse layer size
-        #np.float16 response: input current for a spike
-        #np.float16 dt: simulation step size in msec
+        #np.float32 tau: time constant for spike response
+        #np.float32 dt: simulation step size in msec
         super(synapseLayer, self).__init__()
         self.prevSize = prevSize
         self.postSize = postSize
-        self.response = np.float16(response) / dt
-        self.learningRate = np.float16(learningRate)
+        self.tau = np.float32(tau) / dt
         self.dt = dt
 
-        #np.ndarray weight, dtype = np.float16, shape = (2, prevSize, postSize): excitatory and inhibitatory synapses.
+        #np.ndarray weight, dtype = np.float32, shape = (2, prevSize, postSize): inhibitatory and excitatory synapses.
         self.weight = self._initWeight()
+        #print(np.sum(self.weight, axis = 0))
+
+        #np.ndarray tempTraceList, dtype = np.float32, shape = (n, ): n different membrance potential in mV
+        self.tempTraceList = np.zeros(self.prevSize, dtype = np.float32)
+
+        #pre-computing for fast computing
+        self.factor1 = 1 - self.dt / self.tau
         return
+
 
     def _initWeight(self):
         #OUT
-        #np.ndarray weight, dtype = np.float16, shape = (2, prevSize, postSize): excitatory and inhibitatory synapses.
-        self.weight = np.sort(np.abs(np.random.normal(size = (2, self.prevSize, self.postSize))).astype(np.float16), axis = 0)
+        #np.ndarray weight, dtype = np.float32, shape = (prevSize, postSize):
+        self.weight = np.abs(np.random.normal(size = (self.prevSize, self.postSize))).astype(np.float32)
         self.normalize()
-        self.weight[0] = -1 * self.weight[0]
         return self.weight
+
+
+    def forward(self, tempSpikeList):
+        #IN
+        #np.ndarray tempSpikeList, dtype = np.bool, shape = (prevSize, ): True: fire; False: not fire
+        #OUT
+        #np.ndarray currentList, dtype = np.float32, shape = (postSize, ): postSize different input currents to next layer in μA
+        self.tempTraceList = self.tempTraceList * self.factor1 + tempSpikeList.astype(np.int8)
+        currentList = np.matmul(self.tempTraceList, self.weight)
+        return currentList
 
 
     def normalize(self):
         #normalize weights
+        # print(self.weight)
         weightSquare = np.square(self.weight)
-        self.weight = weightSquare / np.sum(weightSquare, axis = (0, 1))
+        self.weight = self.weight / np.sqrt(np.sum(weightSquare, axis = (0), keepdims = True))
         return
 
-    def forward(self, spikeList):
+    def bcmUpdate(self, prevSpikeRate, postSpikeRate, postAverageSpikeRate, learningRate):
         #IN
-        #np.ndarray spikeList, dtype = np.bool, shape = (prevSize, ): True: fire; False: not fire
-        #OUT
-        #np.ndarray tempCurrentList, dtype = np.float16, shape = (postSize, ): n different input currents
-        tempWeight = self.weight[0] + self.weight[1]
-        unweightedInput = self.response * np.asarray(spikeList, dtype = np.float16)
-        # print('here')
-        # print(self.response)
-        # print(spikeList)
-        # print(np.asarray(spikeList, dtype = np.float16))
-        # print(unweightedInput)
-        tempCurrentList = np.matmul(spikeList.reshape((1, self.prevSize)), tempWeight).reshape(self.postSize)
-        return tempCurrentList
-
-    def ojaUpdate(self, prevSpikeFrq, postSpikeFrq):
-        corrFrq = np.matmul(prevSpikeFrq.reshape(-1, 1), postSpikeFrq.reshape(1, -1))
-        postSqFrq = np.square(postSpikeFrq)
-        dW = np.empty_like(self.weight, dtype = np.float16)
-        for j in range(self.prevSize):
-            for i in range(self.postSize):
-                dW[1, j, i] = self.learningRate * (corrFrq[j, i] - self.weight[1, j, i] * postSqFrq[i])
-                dW[0, j, i] = self.learningRate * (self.weight[0, j, i] * postSqFrq[i] + corrFrq[j, i])
-        self.weight = self.weight + dW
+        #np.ndarray prevSpikeRate dtype = np.float32, shape = (prevSize, ): prev layer spiking rate in Hz
+        #np.ndarray postSpikeRate dtype = np.float32, shape = (postSize, ): post layer spiking rate in Hz
+        #np.ndarray postAverageSpikeRate, dtype = np.float32, shape = (postSize, ): post layer average spiking rate in last iteration in Hz
+        #np.float32 learningRate: step size for changing weights
+        postDiffSpikeRate = postSpikeRate - postAverageSpikeRate
+        # print(postDiffSpikeRate)
+        dw = learningRate * np.matmul(prevSpikeRate.reshape(self.prevSize, 1), (postSpikeRate * postDiffSpikeRate).reshape(1, self.postSize))
+        self.weight = self.weight + dw
         self.normalize()
         return
 
 
-
 if __name__ == '__main__':
-    stepNum = 20000
-    layerSize = 2
-    iData = np.array(range(2), dtype = np.float16)
-    spikeList = np.empty((stepNum, layerSize), dtype = np.bool)
-    layer = poissonInput(layerSize, fMin = 10, fMax = 200)
-    for i in range(stepNum):
-        spikeList[i] = layer.forward(iData)
-    print(np.sum(spikeList, axis = 0))
+    prevSize = 2
+    postSize = 3
+    dt = 0.5
+    tau = 10
+    time = 1000
+    w = 0.5
+    vThreshold = 25
+    stepNum = int(time / dt)
+    layer = supervisedLIF(postSize, vThreshold = vThreshold)
+    synapse = synapseLayer(prevSize, postSize, tau = tau)
+    inLayer = poissonInput(prevSize)
+
+    prevSpike = np.zeros((stepNum, prevSize), dtype = np.bool)
+    tempCurrentList = np.empty((stepNum, postSize), dtype = np.float32)
+    spikeList = np.empty_like(tempCurrentList, dtype = np.bool)
+    tempVoltageList = np.empty_like(tempCurrentList, dtype = np.float32)
+
+    supervisedCurrentList = np.full_like(tempCurrentList, 0, dtype = np.float32)
+    for step in range(stepNum):
+        prevSpike[step] = inLayer.forward(np.asarray([0, 1]))
+        tempCurrentList[step] = synapse.forward(prevSpike[step])
+        spikeList[step] = layer.forward(tempCurrentList[step], supervisedCurrentList[step])
+        tempVoltageList[step] = layer.tempVoltageList
+
+    plotSpike(prevSpike)
     plotSpike(spikeList)
+    plotVoltage(tempVoltageList)
+    plotCurrent(tempCurrentList)
