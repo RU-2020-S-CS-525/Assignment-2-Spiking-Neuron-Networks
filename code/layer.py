@@ -40,7 +40,7 @@ class poissonInput(object):
 
 class forwardLIF(object):
     #feedForward LIF layer
-    def __init__(self, size, capitance = 4, resistance = 64, vRest = 0, vThreshold = 25, dt = 0.5):
+    def __init__(self, size, capitance = 0.5, resistance = 64, vRest = 0, vThreshold = 25, dt = 0.5):
         #int size: number of neurons
         #np.float32 capitance: C_m in μF
         #np.float32 resistance: R_m in kΩ
