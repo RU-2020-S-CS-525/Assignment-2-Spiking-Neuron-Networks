@@ -15,9 +15,9 @@ def getNetwork(fMin = 50, fMax = 100, vThreshold = 25, tau = 10, minSupervisedCu
     #OUT
     #network.supervised SNN: spiking neuron network
     neuronLayerList = []
-    neuronLayerList.append(poissonInput(2, fMin = fMin, fMax = fMax))
-    neuronLayerList.append(supervisedLIF(2, vThreshold = vThreshold))
-    neuronLayerList.append(supervisedLIF(1, vThreshold = vThreshold))
+    neuronLayerList.append(poissonInput(2, fMin = 50, fMax = 250))
+    neuronLayerList.append(IF(10, vThreshold = 0.9))
+    neuronLayerList.append(IF(1, vThreshold = 0.25))
     SNN = supervised(neuronLayerList, minSupervisedCurrent, maxSupervisedCurrent, synapseConfig = {'tau': tau})
     return SNN
 
@@ -72,40 +72,71 @@ def preTrain(SNN, dataX, dataY, forwardTime = 1000, refreshTime = 1000):
         spikeRateListList.append(SNN.spikeRateList)
     return spikeRateListList
 
+def decodeTemporal(spikeList):
+    time = []
+    for i in range(len(spikeList)):
+        if spikeList[i]:
+            time.append(i)
+    return time
+
 def train(SNN, dataX, dataY, iterNum, forwardTime = 1000, refreshTime = 1000, learningRate = 0.1):
-    #IN
-    #network.supervised SNN: spiking neuron network
-    #np.ndarray dataX, dtype = np.flaot32: input data
-    #list dataY [np.ndarray dataYi, dtype = np.float32]: supervised input for each layer
-    #int iterNum: iteration to train
-    #int forwardTime: time to forward
-    #int refreshTime: time to refresh
-    #np.float32 learningRate: step size for changing weights
-    #OUT
-    #list spikeRateListList [[np.ndarray spikeRate, dtype = np.float32]]: [[spikeRate for each layer] for each input data] 
+    # IN
+    # network.supervised SNN: spiking neuron network
+    # np.ndarray dataX, dtype = np.flaot32: input data
+    # list dataY [np.ndarray dataYi, dtype = np.float32]: supervised input for each layer
+    # int iterNum: iteration to train
+    # int forwardTime: time to forward
+    # int refreshTime: time to refresh
+    # np.float32 learningRate: step size for changing weights
+    # OUT
+    # list spikeRateListList [[np.ndarray spikeRate, dtype = np.float32]]: [[spikeRate for each layer] for each input data]
+    # dataSize = dataX.shape[0]
+    # idxList = np.array(range(dataSize), dtype = np.int8)
+    # spikeRateListList = preTrain(SNN, dataX, dataY, forwardTime, refreshTime)
+    #
+    # for iters in range(iterNum):
+    #     averageSpikeRateList = getAverageRate(spikeRateListList, dataSize)
+    #     spikeRateListList = []
+    #     print('iter %d: ' %iters)
+    #     np.random.shuffle(idxList)
+    #     for idx in idxList:
+    #         print(' %d, %d: ' %(dataX[idx, 0].astype(np.int8), dataX[idx, 1].astype(np.int8)), end = '')
+    #         #forward
+    #         spikeRate = SNN.bcmPreUpdate(dataX[idx], dataY[idx], forwardTime, refreshTime)
+    #         spikeRateListList.append(SNN.spikeRateList)
+    #         print('%.2f' %spikeRate, end = '')
+    #         # print(SNN.spikeRateList)
+    #         #update
+    #         SNN.bcmUpdate(averageSpikeRateList, learningRate)
+    #         print(', ', end = '')
+    #         #predict (for debug)
+    #         SNN.refresh(refreshTime)
+    #         spike = SNN.batchedPredict(dataX[idx], forwardTime)
+    #         print('%.2f' %(np.sum(spike).astype(np.float32) / forwardTime * 1000))
+    #     SNN._printWeight()
+    # return
     dataSize = dataX.shape[0]
     idxList = np.array(range(dataSize), dtype = np.int8)
-    spikeRateListList = preTrain(SNN, dataX, dataY, forwardTime, refreshTime)
+    # spikeRateListList = preTrain(SNN, dataX, dataY, forwardTime, refreshTime)
 
     for iters in range(iterNum):
-        averageSpikeRateList = getAverageRate(spikeRateListList, dataSize)
-        spikeRateListList = []
         print('iter %d: ' %iters)
         np.random.shuffle(idxList)
         for idx in idxList:
             print(' %d, %d: ' %(dataX[idx, 0].astype(np.int8), dataX[idx, 1].astype(np.int8)), end = '')
             #forward
-            spikeRate = SNN.bcmPreUpdate(dataX[idx], dataY[idx], forwardTime, refreshTime)
-            spikeRateListList.append(SNN.spikeRateList)
-            print('%.2f' %spikeRate, end = '')
-            # print(SNN.spikeRateList)
-            #update
-            SNN.bcmUpdate(averageSpikeRateList, learningRate)
-            print(', ', end = '')
-            #predict (for debug)
-            SNN.refresh(refreshTime)
-            spike = SNN.batchedPredict(dataX[idx], forwardTime)
-            print('%.2f' %(np.sum(spike).astype(np.float32) / forwardTime * 1000))
+            spikeRate = SNN.stdpTrain(dataX[idx], dataY[idx][2], forwardTime, refreshTime)
+
+            print('%.2f' %(np.sum(spikeRate).astype(np.float32) / forwardTime * 1000))
+            SNN.reset()
+            spikeRate = SNN.batchedPredict(dataX[idx], forwardTime)
+            print('%.2f' %(np.sum(spikeRate).astype(np.float32) / forwardTime * 1000))
+    for iter in range(10):
+        for idx in idxList:
+            print(' %d, %d: ' %(dataX[idx, 0].astype(np.int8), dataX[idx, 1].astype(np.int8)), end = '')
+            SNN.reset()
+            spikeRate = SNN.batchedPredict(dataX[idx], forwardTime)
+            print('%.2f' %(np.sum(spikeRate).astype(np.float32) / forwardTime * 1000))
     return
 
 def test(SNN, dataX, iterNum, forwardTime = 1000, refreshTime = 1000):
@@ -123,7 +154,7 @@ def test(SNN, dataX, iterNum, forwardTime = 1000, refreshTime = 1000):
         np.random.shuffle(idxList)
         for idx in idxList:
             print(' %d, %d: ' %(dataX[idx, 0].astype(np.int8), dataX[idx, 1].astype(np.int8)), end = '')
-            SNN.refresh(refreshTime)
+            SNN.reset()
             spike = SNN.batchedPredict(dataX[idx], forwardTime)
             print('%.2f' %(np.sum(spike).astype(np.float32) / forwardTime * 1000))
     return
@@ -144,5 +175,6 @@ if __name__ == '__main__':
     dataX, dataY = getDataset()
     for i in range(4):
         print(dataX[i], dataY[i])
-    train(SNN, dataX, dataY, iterNum = 50, forwardTime = forwardTime, refreshTime = refreshTime, learningRate = learningRate)
+    train(SNN, dataX, dataY, iterNum = 100, forwardTime = forwardTime, refreshTime = refreshTime, learningRate = learningRate)
+    # test(SNN, dataX, iterNum=10)
     SNN._printWeight()
