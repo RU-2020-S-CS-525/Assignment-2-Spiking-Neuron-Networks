@@ -162,38 +162,62 @@ class supervised(object):
         self.batchedPredict(iData, time)
         return
 
-    def _printWeight(self):
-        for layerIdx in range(self.layerNum):
-            print(self.synapseLayerList[layerIdx].weight)
-            print()
-            # print(np.sum(np.square(self.synapseLayerList[layerIdx].weight), axis = 0))
+    def reset(self):
+        #reset states to init
+        for neuron in self.neuronLayerList:
+            neuron.reset()
+        for synapse in self.synapseLayerList:
+            synapse.reset()
         return
 
-    def bcmPreUpdate(self, iData, supervisedIData, forwardTime, refreshTime):
+    def _printWeight(self):
+        #print weight of each layer
+        for layerIdx in range(self.layerNum):
+            self.synapseLayerList[layerIdx].printWeight()
+        return
+
+    def bcmPreUpdate(self, iData, supervisedIData, forwardTime):
         #IN
         #np.ndarray iData, dtype = np.float32: input data
         #list supervisedIDataList, [np.ndarray supervisedIData, dtype = np.float32]: supervised input data for each layer
         #int forwardTime: time to forward
-        #int refreshTime: time to refresh
         #OUT
         #np.ndarray spikeRateList[-1], dtype = np.float32: last layer spiking rate
-        self.refresh(refreshTime)
+
+        self.reset()
         self.batchedForward(iData, supervisedIData, forwardTime)
         self.spikeRateList = [np.empty(self.neuronLayerList[i].size, dtype = np.float32) for i in range(self.layerNum + 1)]
         for layerIdx in range(0, self.layerNum + 1):
             self.spikeRateList[layerIdx] = np.sum(self.spikeListList[layerIdx], axis = 0).astype(np.float32) / forwardTime * 1000
         return self.spikeRateList[-1]
 
-    def bcmUpdate(self, averageSpikeRateList, learningRate):
+    def bcmUpdate(self, averageSpikeRateList, learningRate, forwardTime, constrainList = None, trainLayerSet = None):
         #IN
         #list averageSpikeRateList, [np.ndarray averageSpikeRate, dtype = np.float32]: average spiking rate in last iteration in Hz
         #np.float32 learningRate: step size for changing weights
+        #int forwardTime: time to forward
+        #list constrainList [function layerConstrain]: constrains of weights for each layer. None: no constrain
+        #set trainLayerset: the index of layer that need to train. None: all need to train
+        if constrainList is None:
+            constrainList = [None for i in range(self.layerNum)]
+        if trainLayerSet is None:
+            trainLayerSet is {i for i in range(self.layerNum)}
         for layerIdx in range(0, self.layerNum):
             tempSynapseLayer = self.synapseLayerList[layerIdx]
             postAverageSpikeRate = averageSpikeRateList[layerIdx + 1]
             prevSpikeRate = self.spikeRateList[layerIdx]
             postSpikeRate = self.spikeRateList[layerIdx + 1]
-            tempSynapseLayer.bcmUpdate(prevSpikeRate, postSpikeRate, postAverageSpikeRate, learningRate)
+            if layerIdx in trainLayerSet:
+                tempSynapseLayer.bcmUpdate(prevSpikeRate, postSpikeRate, postAverageSpikeRate, learningRate, forwardTime, constrainList[layerIdx])
+        return
+
+    def extend(self, tempNeuronLayer):
+        #IN
+        #layer tempNeuronLayer: layer to append
+        tempSynapseLayer = synapseLayer(self.neuronLayerList[-1].size, tempNeuronLayer.size, **self.synapseConfig)
+        self.neuronLayerList.append(tempNeuronLayer)
+        self.synapseLayerList.append(tempSynapseLayer)
+        self.layerNum = self.layerNum + 1
         return
 
     def bpStdpUpdate(self, time, supervisedIdata, learningRate = 0.00005):

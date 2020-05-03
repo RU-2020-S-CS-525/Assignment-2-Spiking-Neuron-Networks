@@ -104,9 +104,12 @@ class IF(object):
     def reset(self):
         self.tempVoltageList = np.full(self.size, self.vRest, dtype=np.float32)
 
+    def reset(self):
+        return
+
 class forwardLIF(object):
     #feedForward LIF layer
-    def __init__(self, size, capitance = 1, resistance = 20, vRest = -65, vThreshold = 0, dt = 1):
+    def __init__(self, size, capitance = 0.5, resistance = 64, vRest = 0, vThreshold = 25, dt = 0.5)
         #int size: number of neurons
         #np.float32 capitance: C_m in μF
         #np.float32 resistance: R_m in kΩ
@@ -141,11 +144,13 @@ class forwardLIF(object):
         return spikeList
 
     def reset(self):
-        self.tempVoltageList = np.full(self.size, self.vRest, dtype=np.float32)
+        self.tempVoltageList = np.full(self.size, self.vRest, dtype = np.float32)
+        return
+
 
 class supervisedLIF(object):
     #feedForward LIF layer with supervised input
-    def __init__(self, size, capitance = 1, resistance = 20, vRest = -65, vThreshold = 5, dt = 1):
+    def __init__(self, size, capitance = 0.5, resistance = 64, vRest = 0, vThreshold = 25, dt = 0.5):
         #int size: number of neurons
         #np.float32 capitance: C_m in μF
         #np.float32 resistance: R_m in kΩ
@@ -183,7 +188,8 @@ class supervisedLIF(object):
         return spikeList
 
     def reset(self):
-        self.tempVoltageList = np.full(self.size, self.vRest, dtype=np.float32)
+        self.tempVoltageList = np.full(self.size, self.vRest, dtype = np.float32)
+        return
 
 class synapseLayer(object):
     #translate presynapse spike to postsynapse input current
@@ -219,6 +225,10 @@ class synapseLayer(object):
         self.normalize()
         return self.weight
 
+    def reset(self):
+        self.tempTraceList = np.zeros(self.prevSize, dtype = np.float32)
+        return
+
 
     def forward(self, tempSpikeList):
         #IN
@@ -235,57 +245,87 @@ class synapseLayer(object):
         #normalize weights
         # print(self.weight)
         weightSquare = np.square(self.weight)
-        self.weight = self.weight / np.sqrt(np.sum(weightSquare, axis = (0), keepdims = True))
+        # print(np.sqrt(np.sum(weightSquare, axis = 0, keepdims = True)))
+        self.weight = self.weight / np.sqrt(np.sum(weightSquare, axis = 0, keepdims = True))
         return
 
-    def bcmUpdate(self, prevSpikeRate, postSpikeRate, postAverageSpikeRate, learningRate):
+    def bcmUpdate(self, prevSpikeRate, postSpikeRate, postAverageSpikeRate, learningRate, forwardTime, constrain = None):
         #IN
         #np.ndarray prevSpikeRate dtype = np.float32, shape = (prevSize, ): prev layer spiking rate in Hz
         #np.ndarray postSpikeRate dtype = np.float32, shape = (postSize, ): post layer spiking rate in Hz
         #np.ndarray postAverageSpikeRate, dtype = np.float32, shape = (postSize, ): post layer average spiking rate in last iteration in Hz
         #np.float32 learningRate: step size for changing weights
+        #int forwardTime: time to forward
+        #function constrain: constrain of weights. None: no constrain
         postDiffSpikeRate = postSpikeRate - postAverageSpikeRate
         # print(postDiffSpikeRate)
         dw = learningRate * np.matmul(prevSpikeRate.reshape(self.prevSize, 1), (postSpikeRate * postDiffSpikeRate).reshape(1, self.postSize))
-        self.weight = self.weight + dw
+        if constrain is not None:
+            dw = constrain(dw)
+        self.weight = self.weight + dw * forwardTime
         self.normalize()
         return
 
-    def stdpUpdate(self, prevSpikeList, postSpikeList, learningRate = 0.005, supervisedSpikeList = None):
-        dW = np.empty_like(self.weight, dtype = np.float64)
-        self.prevSpikeTrace = self.prevSpikeTrace * self.factor1 + prevSpikeList.astype(np.int8)
-        self.postSpikeTrace = self.postSpikeTrace * self.factor1 + postSpikeList.astype(np.int8)
-        for j in range(self.prevSize):
-            for i in range(self.postSize):
-                dW[j, i] = prevSpikeList[j].astype(np.int8) * learningRate + \
-                           postSpikeList[i].astype(np.int8) * learningRate + \
-                           prevSpikeList[j].astype(np.int8) * 0.005 * 1.05 * self.postSpikeTrace[i] + \
-                           postSpikeList[i].astype(np.int8) * 0.005 * self.prevSpikeTrace[j]
-        self.weight += dW
-        # if supervisedSpikeList == None:
-        #
-        # else:
-        #     for j in range(self.prevSize):
-        #         for i in range(self.postSize):
-        #             dW[j, i] = (supervisedSpikeList[i].astype(np.int8) - postSpikeList[i].astype(np.int8)) * \
-        #                        (learningRate + 0.005 * self.prevSpikeTrace[j])
-        #     self.weight += dW
-        # self.normalize()
+
+    def printWeight(self):
+        print(self.weight)
+        print()
         return
 
+    # def _initWeight(self):
+    #     #OUT
+    #     #np.ndarray weight, dtype = np.float32, shape = (prevSize, postSize):
+    #     self.weight = np.abs(np.random.normal(size = (2, self.prevSize, self.postSize))).astype(np.float32)
+    #     self.weight = np.sort(self.weight, axis = 0)
+    #     self.weight[0] = 0
+    #     self.normalize()
+    #     print(np.sum(self.weight, axis = 0))
+    #     return self.weight
+
+
+    # def forward(self, tempSpikeList):
+    #     #IN
+    #     #np.ndarray tempSpikeList, dtype = np.bool, shape = (prevSize, ): True: fire; False: not fire
+    #     #OUT
+    #     #np.ndarray currentList, dtype = np.float32, shape = (postSize, ): postSize different input currents to next layer in μA
+    #     self.tempTraceList = self.tempTraceList * self.factor1 + tempSpikeList.astype(np.int8)
+    #     tempWeight = np.sum(self.weight, axis = 0)
+    #     currentList = np.matmul(self.tempTraceList, tempWeight)
+    #     return currentList
+
+
+    # def normalize(self):
+    #     #normalize weights
+    #     # print(self.weight)
+    #     weightSquare = np.square(self.weight)
+    #     # print(np.sqrt(np.sum(weightSquare, axis = 0, keepdims = True)))
+    #     self.weight = self.weight / np.sqrt(np.sum(weightSquare, axis = (0, 1), keepdims = True))
+    #     return
+
+    # def bcmUpdate(self, prevSpikeRate, postSpikeRate, postAverageSpikeRate, learningRate):
+    #     #IN
+    #     #np.ndarray prevSpikeRate dtype = np.float32, shape = (prevSize, ): prev layer spiking rate in Hz
+    #     #np.ndarray postSpikeRate dtype = np.float32, shape = (postSize, ): post layer spiking rate in Hz
+    #     #np.ndarray postAverageSpikeRate, dtype = np.float32, shape = (postSize, ): post layer average spiking rate in last iteration in Hz
+    #     #np.float32 learningRate: step size for changing weights
+    #     postDiffSpikeRate = postSpikeRate - postAverageSpikeRate
+    #     # print(postDiffSpikeRate)
+    #     dw = learningRate * np.matmul(prevSpikeRate.reshape(self.prevSize, 1), (postSpikeRate * postDiffSpikeRate).reshape(1, self.postSize))
+    #     self.weight[0] = self.weight[0] + dw
+    #     self.weight[1] = self.weight[1] + dw
+    #     self.normalize()
+    #     return
+
+    # def printWeight(self):
+    #     print(np.sum(self.weight, axis = 0))
+    #     print()
+    #     return
     def bpStdpUpdate(self, prevSpikeList, Xis, learningRate):
 
         nextXis = np.matmul(self.weight, Xis.reshape([self.postSize, 1])).reshape(self.prevSize)
         dW = np.matmul(np.sum(prevSpikeList, axis = 0).reshape([self.prevSize, 1]), Xis.reshape([1, self.postSize])) * learningRate
         self.weight += dW
         return nextXis
-
-    def reset(self):
-        self.tempTraceList = np.zeros(self.prevSize, dtype = np.float32)
-        self.prevSpikeTrace = np.zeros(self.prevSize, dtype = np.float32)
-        self.postSpikeTrace = np.zeros(self.postSize, dtype = np.float32)
-
-
 
 if __name__ == '__main__':
     prevSize = 2
