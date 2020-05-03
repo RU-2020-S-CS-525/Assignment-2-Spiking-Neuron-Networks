@@ -184,6 +184,8 @@ class synapseLayer(object):
         #np.ndarray postSpikeRate dtype = np.float32, shape = (postSize, ): post layer spiking rate in Hz
         #np.ndarray postAverageSpikeRate, dtype = np.float32, shape = (postSize, ): post layer average spiking rate in last iteration in Hz
         #np.float32 learningRate: step size for changing weights
+        #int forwardTime: time to forward
+        #function constrain: constrain of weights. None: no constrain
         postDiffSpikeRate = postSpikeRate - postAverageSpikeRate
         # print(postDiffSpikeRate)
         dw = learningRate * np.matmul(prevSpikeRate.reshape(self.prevSize, 1), (postSpikeRate * postDiffSpikeRate).reshape(1, self.postSize))
