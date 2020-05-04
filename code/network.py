@@ -127,11 +127,11 @@ class supervised(object):
             tempSynapseLayer = self.synapseLayerList[layerIdx]
             tempSpikeList = self.spikeListList[layerIdx]
 
-            oData = tempNeuronLayer.forward(iData)
+            oData = tempNeuronLayer.forward(iData, stepIdx)
             tempSpikeList[stepIdx] = oData
             iData = tempSynapseLayer.forward(oData)
 
-        oData = self.neuronLayerList[-1].forward(iData)
+        oData = self.neuronLayerList[-1].forward(iData, stepIdx)
         self.spikeListList[-1][stepIdx] = oData
         return oData
 
