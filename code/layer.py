@@ -2,14 +2,14 @@ import numpy as np
 
 from utility import *
 
-class tmperalInput(object):
+class temporalInput(object):
     def __init__(self, size, dt = 1):
         # IN
         # int size: number of neurons
         # np.float32 fMin: mean firing rate with input 0, in Hz
         # np.float32 fMax: mean firing rate with input 1, in Hz
         # np.float32 dt: simulation step size in msec
-        super(tmperalInput, self).__init__()
+        super(temporalInput, self).__init__()
         self.size = size
         self.dt = dt
 
@@ -24,15 +24,15 @@ class tmperalInput(object):
         spikeList = np.zeros(self.size)
         if self.size == 1:
             if iData == 1:
-                spikeList[0] = time % 5 == 0
+                spikeList[0] = time % 10 == 0
             else:
-                spikeList[0] = time % 5 == 2
+                spikeList[0] = time % 10 == 6
         else:
             for i in range(self.size):
                 if iData[i] == 1:
-                    spikeList[i] = time % 5 == 0
+                    spikeList[i] = time % 10 == 0
                 else:
-                    spikeList[i] = time % 5 == 2
+                    spikeList[i] = time % 10 == 6
         return spikeList
     def reset(self):
         return
@@ -104,12 +104,9 @@ class IF(object):
     def reset(self):
         self.tempVoltageList = np.full(self.size, self.vRest, dtype=np.float32)
 
-    def reset(self):
-        return
-
 class forwardLIF(object):
     #feedForward LIF layer
-    def __init__(self, size, capitance = 0.5, resistance = 64, vRest = 0, vThreshold = 25, dt = 0.5)
+    def __init__(self, size, capitance = 0.5, resistance = 64, vRest = 0, vThreshold = 25, dt = 0.5):
         #int size: number of neurons
         #np.float32 capitance: C_m in μF
         #np.float32 resistance: R_m in kΩ
@@ -132,7 +129,7 @@ class forwardLIF(object):
         self.factor2 = 1 - self.factor1 / self.resistance
         return
 
-    def forward(self, tempCurrentList, supervisedCurrentList):
+    def forward(self, tempCurrentList, stepIdx):
         #generate spikes given injected currents
         #IN
         #np.ndarray tempCurrentList, dtype = np.float32, shape = (n, ): n different input currents in μA
@@ -191,9 +188,10 @@ class supervisedLIF(object):
         self.tempVoltageList = np.full(self.size, self.vRest, dtype = np.float32)
         return
 
+
 class synapseLayer(object):
     #translate presynapse spike to postsynapse input current
-    def __init__(self, prevSize, postSize, tau = 10, dt = 1):
+    def __init__(self, prevSize, postSize, tau = 5, dt = 1):
         #int prevSize: presynapse layer size
         #int postSize: postsynapse layer size
         #np.float32 tau: time constant for spike response
@@ -272,60 +270,23 @@ class synapseLayer(object):
         print()
         return
 
-    # def _initWeight(self):
-    #     #OUT
-    #     #np.ndarray weight, dtype = np.float32, shape = (prevSize, postSize):
-    #     self.weight = np.abs(np.random.normal(size = (2, self.prevSize, self.postSize))).astype(np.float32)
-    #     self.weight = np.sort(self.weight, axis = 0)
-    #     self.weight[0] = 0
-    #     self.normalize()
-    #     print(np.sum(self.weight, axis = 0))
-    #     return self.weight
+    def updateTrace(self, prevSpikeList, postSpikeList):
+        self.prevSpikeTrace = self.prevSpikeTrace * self.factor1 + prevSpikeList
+        self.postSpikeTrace = self.postSpikeTrace * self.factor1 + postSpikeList
+        return self.postSpikeTrace, self.prevSpikeTrace
 
-
-    # def forward(self, tempSpikeList):
-    #     #IN
-    #     #np.ndarray tempSpikeList, dtype = np.bool, shape = (prevSize, ): True: fire; False: not fire
-    #     #OUT
-    #     #np.ndarray currentList, dtype = np.float32, shape = (postSize, ): postSize different input currents to next layer in μA
-    #     self.tempTraceList = self.tempTraceList * self.factor1 + tempSpikeList.astype(np.int8)
-    #     tempWeight = np.sum(self.weight, axis = 0)
-    #     currentList = np.matmul(self.tempTraceList, tempWeight)
-    #     return currentList
-
-
-    # def normalize(self):
-    #     #normalize weights
-    #     # print(self.weight)
-    #     weightSquare = np.square(self.weight)
-    #     # print(np.sqrt(np.sum(weightSquare, axis = 0, keepdims = True)))
-    #     self.weight = self.weight / np.sqrt(np.sum(weightSquare, axis = (0, 1), keepdims = True))
-    #     return
-
-    # def bcmUpdate(self, prevSpikeRate, postSpikeRate, postAverageSpikeRate, learningRate):
-    #     #IN
-    #     #np.ndarray prevSpikeRate dtype = np.float32, shape = (prevSize, ): prev layer spiking rate in Hz
-    #     #np.ndarray postSpikeRate dtype = np.float32, shape = (postSize, ): post layer spiking rate in Hz
-    #     #np.ndarray postAverageSpikeRate, dtype = np.float32, shape = (postSize, ): post layer average spiking rate in last iteration in Hz
-    #     #np.float32 learningRate: step size for changing weights
-    #     postDiffSpikeRate = postSpikeRate - postAverageSpikeRate
-    #     # print(postDiffSpikeRate)
-    #     dw = learningRate * np.matmul(prevSpikeRate.reshape(self.prevSize, 1), (postSpikeRate * postDiffSpikeRate).reshape(1, self.postSize))
-    #     self.weight[0] = self.weight[0] + dw
-    #     self.weight[1] = self.weight[1] + dw
-    #     self.normalize()
-    #     return
-
-    # def printWeight(self):
-    #     print(np.sum(self.weight, axis = 0))
-    #     print()
-    #     return
     def bpStdpUpdate(self, prevSpikeList, Xis, learningRate):
 
         nextXis = np.matmul(self.weight, Xis.reshape([self.postSize, 1])).reshape(self.prevSize)
         dW = np.matmul(np.sum(prevSpikeList, axis = 0).reshape([self.prevSize, 1]), Xis.reshape([1, self.postSize])) * learningRate
         self.weight += dW
         return nextXis
+
+    def reset(self):
+        self.tempTraceList = np.zeros(self.prevSize, dtype = np.float32)
+        self.prevSpikeTrace = np.zeros(self.prevSize, dtype = np.float32)
+        self.postSpikeTrace = np.zeros(self.postSize, dtype = np.float32)
+
 
 if __name__ == '__main__':
     prevSize = 2

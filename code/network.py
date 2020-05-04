@@ -26,7 +26,7 @@ class supervised(object):
         self.diffSupervisedCurrent = self.maxSupervisedCurrent - self.minSupervisedCurrent
         self.synapseLayerList = [synapseLayer(self.neuronLayerList[i].size, self.neuronLayerList[i + 1].size, **self.synapseConfig) for i in range(self.layerNum)]
         self.spikeListList = [np.empty(0, dtype = np.bool) for i in range(self.layerNum + 1)]
-        self.supervisedTrace = 0
+        self.diffTrace = np.zeros(self.neuronLayerList[self.layerNum].size, dtype = np.float32)
         return
 
 
@@ -36,16 +36,16 @@ class supervised(object):
         #OUT
         #np.ndarray supervisedCurrent, dtype = np.float32: supervised current to inject into neurons
         return supervisedIData * self.diffSupervisedCurrent + self.minSupervisedCurrent
-    def _getSupervisedTrace(self, supervisedIData, time):
+    def _getDiffTrace(self, supervisedSpikes, outSpikes):
 
-        d = poissonInput(self.neuronLayerList[-1].size, 50, 250)
-        spike = d.forward(supervisedIData)
-        self.supervisedTrace = self.supervisedTrace * 9 / 10 + spike.astype(np.int8)
-        return self.supervisedTrace
+        self.diffTrace = self.diffTrace * 4 / 5 + (supervisedSpikes - outSpikes).astype(np.int8)
+        return self.diffTrace
+
     def _getSupervisedSpikes(self, supervisedIData, time):
 
-        d = poissonInput(self.neuronLayerList[-1].size, 50, 250)
-        return d.forward(supervisedIData)
+        d = temporalInput(self.neuronLayerList[-1].size)
+        return d.forward(supervisedIData, time)
+
     def _forward(self, iData, supervisedIDataList, stepIdx):
         #IN
         #np.ndarray iData, dtype = np.float32: input data
@@ -88,12 +88,12 @@ class supervised(object):
         self.spikeListList = [np.empty((stepNum, self.neuronLayerList[i].size), dtype = np.bool) for i in range(self.layerNum + 1)]
 
         for stepIdx in range(stepNum):
-            self._bpStdpForward(iData, stepIdx, supervisedIData)
-            self.bpStdpUpdate(stepIdx, supervisedIData)
+            self._stdpForward(iData, stepIdx, supervisedIData)
+            self.stdpUpdate(stepIdx, supervisedIData)
         return self.spikeListList[-1]
 
 
-    def _bpStdpForward(self, iData, stepIdx, supervisedIDataList = None):
+    def _stdpForward(self, iData, stepIdx, supervisedIDataList = None):
         #IN
         #np.ndarray iData, dtype = np.float32: input data
         #list supervisedIDataList, [np.ndarray supervisedIData, dtype = np.float32]: supervised input data for each layer
@@ -105,11 +105,11 @@ class supervised(object):
             tempSynapseLayer = self.synapseLayerList[layerIdx]
             tempSpikeList = self.spikeListList[layerIdx]
 
-            oData = tempNeuronLayer.forward(iData)
+            oData = tempNeuronLayer.forward(iData, stepIdx)
             tempSpikeList[stepIdx] = oData
             iData = tempSynapseLayer.forward(oData)
 
-        oData = self.neuronLayerList[-1].forward(iData)
+        oData = self.neuronLayerList[-1].forward(iData, stepIdx)
         self.spikeListList[-1][stepIdx] = oData
         return oData
 
@@ -248,12 +248,35 @@ class supervised(object):
                                                    learningRate)
         return
 
-    def stdpUpdate(self, time, supervisedIdata, learningRate = 0.0001):
-        for layerIdx in range(self.layerNum - 1):
+    def stdpUpdate(self, time, supervisedIdata, learningRate = 0.05):
+
+        a_pre = 0.5
+        a_post = 1.2
+
+        prevSpikes = self.spikeListList[self.layerNum - 1][time]
+        outSpikes = self.spikeListList[self.layerNum][time]
+        supervisedSpikes = self._getSupervisedSpikes(supervisedIdata, time)
+        prevTrace, outSpikes = self.synapseLayerList[self.layerNum - 1].updateTrace(prevSpikes, outSpikes)
+        diffTrace = self._getDiffTrace(supervisedSpikes, outSpikes)
+        for j in range(prevSpikes.size):
+            for i in range(outSpikes.size):
+                dw = (supervisedSpikes[i] - outSpikes[i]) * (learningRate + a_post * prevTrace[j])
+                dw += prevSpikes[j] * a_pre * diffTrace[i]
+                dw /= prevSpikes.size
+                self.synapseLayerList[self.layerNum - 1].weight[j, i] += dw
+        weight = self.synapseLayerList[self.layerNum - 1].weight
+        for layerIdx in range(self.layerNum - 2, -1, -1):
             prevSpikes = self.spikeListList[layerIdx][time]
             postSpikes = self.spikeListList[layerIdx + 1][time]
-            self.synapseLayerList[layerIdx].stdpUpdate(prevSpikes, postSpikes,
-                                                   learningRate)
+            prevTrace, postTrace = self.synapseLayerList[layerIdx].updateTrace(prevSpikes, postSpikes)
+            for j in range(prevSpikes.size):
+                for i in range(postSpikes.size):
+                    dw = 0
+                    for o in range (outSpikes.size()):
+                        dw += (supervisedSpikes[o] - outSpikes[o]) * (learningRate + a_post * prevTrace[j]) + \
+                            prevSpikes[j] * a_pre * diffTrace[o]
+                    dw *= weight[i, o] / prevSpikes.size() / postSpikes.size()
+                    self.synapseLayerList[layerIdx].weight[j, i] += dw
         return
 
     def reset(self):
