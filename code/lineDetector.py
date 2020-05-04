@@ -121,7 +121,7 @@ if __name__ == '__main__':
     result = test(SNN, dataX, 1, forwardTime = 1000, plot = True, legend = False, fn_save = fn_save)
 
     iterNum, dataSize, neuronNum = result.shape
-    xAxis = np.arange(dataSize)
+    xAxis = np.arange(dataSize) + 1
     for iters in range(iterNum):
         for idx in range(neuronNum):
             line, = plt.plot(xAxis, result[iters, :, idx], c = color[idx], marker = 'o')
