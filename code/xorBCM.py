@@ -115,19 +115,23 @@ def train(SNN, dataX, dataY, iterNum, forwardTime = 1000, learningRate = 0.1, la
             # SNN.refresh(refreshTime)
             spike = SNN.batchedPredict(dataX[idx], forwardTime)
             print(np.sum(spike, axis = 0).astype(np.float32) / forwardTime * 1000)
-        SNN._printWeight()
+        # SNN._printWeight()
         test(SNN, dataX, iterNum = 1, forwardTime = forwardTime)
     return SNN
 
-def test(SNN, dataX, iterNum, forwardTime = 1000, plot = False):
+def test(SNN, dataX, iterNum, forwardTime = 1000, plot = False, legend = True, fn_save = None):
     #IN
     #network.supervised SNN: spiking neuron network
     #np.ndarray dataX, dtype = np.float32: input data
     #int iterNum: iteration to train
     #int forwardTime: time to forward
     #bool plot: True: plot spike list; False: no plot
+    if fn_save is None:
+        fn_save = 'noName'
     dataSize = dataX.shape[0]
     idxList = np.array(range(dataSize), dtype = np.int8)
+
+    testResult = [[None for i in range(dataSize)] for j in range(iterNum)]
 
     for iters in range(iterNum):
         print('iter %d: ' %iters)
@@ -136,10 +140,12 @@ def test(SNN, dataX, iterNum, forwardTime = 1000, plot = False):
             print(' %d, %d: ' %(dataX[idx, 0].astype(np.int8), dataX[idx, 1].astype(np.int8)), end = '')
             SNN.reset()
             spike = SNN.batchedPredict(dataX[idx], forwardTime)
-            print(np.sum(spike, axis = 0).astype(np.float32) / forwardTime * 1000)
+            rate = np.sum(spike, axis = 0).astype(np.float32) / forwardTime * 1000
+            print(rate)
+            testResult[iters][idx] = rate
             if plot is True:
-                plotSpikeList(SNN.spikeListList)
-    return SNN
+                plotSpikeList(SNN.spikeListList, legend = legend, fn_save = fn_save + '.input%d.iter%d' %(idx, iters))
+    return testResult
 
 
 def layer1Constrain(weight):
@@ -184,7 +190,7 @@ def trainLayer1(fMin, fMax, capitance, resistance, vThreshold, tau, minSupervise
     for i in range(4):
         print(dataX[i], dataY[i])
     SNN = train(SNN, dataX, dataY, iterNum = 19, forwardTime = forwardTime, learningRate = learningRate, layerConstrainList = [layer1Constrain], trainLayerSet = {0})
-    SNN._printWeight()
+    # SNN._printWeight()
     return SNN
 
 def trainLayer2(SNN, capitance, resistance, vThreshold, forwardTime, learningRate):
@@ -202,7 +208,7 @@ def trainLayer2(SNN, capitance, resistance, vThreshold, forwardTime, learningRat
     for i in range(4):
         print(dataX[i], dataY[i])
     SNN = train(SNN, dataX, dataY, iterNum = 5, forwardTime = forwardTime, learningRate = learningRate, layerConstrainList = [layer1Constrain, layer2Constrain], trainLayerSet = {1})
-    SNN._printWeight()
+    # SNN._printWeight()
     return SNN
 
 
@@ -220,10 +226,10 @@ if __name__ == '__main__':
     forwardTime = 500
     learningRate = 8e-10
 
-    print('train layer 1')
+    print('\ntrain layer 1')
     SNN = trainLayer1(fMin, fMax, capitance, resistance ,vThreshold, tau, minSupervisedCurrent, maxSupervisedCurrent, forwardTime, learningRate)
-    print('train layer 2')
+    print('\ntrain layer 2')
     SNN = trainLayer2(SNN, capitance, resistance, vThreshold, forwardTime, learningRate)
     dataX, _ = getDataset(layerSize = 3)
-    print('test')
-    SNN = test(SNN, dataX, iterNum = 5, forwardTime = 1000, plot = True)
+    print('\ntest')
+    SNN = test(SNN, dataX, iterNum = 5, forwardTime = 1000, plot = True, fn_save = 'xorBCM')

@@ -9,8 +9,8 @@ class lineData(object):
         self.dataX = self._getDataX()
         return
 
-    def visualize(self, zoom = 10):
-        for data in self.dataX:
+    def visualize(self, zoom = 10, fn_save = None):
+        for idx, data in enumerate(self.dataX):
             image = np.zeros((9 * zoom, 9 * zoom, 3), dtype = np.uint8)
 
             for row in range(9):
@@ -21,6 +21,8 @@ class lineData(object):
             img = Image.fromarray(image)
             img = ImageChops.invert(img)
             plt.imshow(img)
+            if fn_save is not None:
+                plt.savefig('../docs/plots/' + fn_save + '.input%d' %idx + '.pic.png')
             plt.show()
         return
 
@@ -125,8 +127,8 @@ class extendLineData(object):
         self.dataX = self._getDataX()
         return
 
-    def visualize(self, zoom = 10):
-        for data in self.dataX:
+    def visualize(self, zoom = 10, fn_save = None):
+        for idx, data in enumerate(self.dataX):
             image = np.zeros((9 * zoom, 9 * zoom, 3), dtype = np.uint8)
 
             for row in range(9):
@@ -137,6 +139,8 @@ class extendLineData(object):
             img = Image.fromarray(image)
             img = ImageChops.invert(img)
             plt.imshow(img)
+            if fn_save is not None:
+                plt.savefig('../docs/plots/' + fn_save + '.input%d' %idx + '.pic.png')
             plt.show()
         return
 
@@ -216,5 +220,7 @@ class extendLineData(object):
 
 
 if __name__ == '__main__':
+    data = lineData()
+    data.visualize(zoom = 1, fn_save = 'lineAng')
     data = extendLineData()
-    data.visualize(zoom = 1)
+    data.visualize(zoom = 1, fn_save = 'linePos')
