@@ -27,7 +27,7 @@ def plotSpike(spikeList, dt = 0.5, fn_save = None):
     plt.show()
     return
 
-def plotSpikeList(spikeListList, dt = 0.5, legend = True, fn_save = None):
+def plotSpikeList(spikeListList, dt = 0.5, fn_save = None):
     #IN
     #list spikeListList [np.ndarray spikeList]: spikeList by layer
     #np.float32 dt: simulation step size in msec
@@ -49,8 +49,7 @@ def plotSpikeList(spikeListList, dt = 0.5, legend = True, fn_save = None):
             point.set_label('neuron ' + str(layerIdx) + '.' + str(i))
     plt.xlabel('time (msec)')
     plt.ylabel('neuron index')
-    if legend:
-        plt.legend(loc = 0)
+    plt.legend(loc = 0)
     plt.title('spiking behavior')
     plt.tight_layout()
     if fn_save is not None:
