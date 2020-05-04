@@ -25,7 +25,7 @@ def getNetwork(fMin = 50, fMax = 100, capitance = 0.5, resistance = 64, vThresho
 
 def getDataset(layerSize):
     #OUT
-    #np.ndarray dataX, dtype = np.flaot32: input data
+    #np.ndarray dataX, dtype = np.float32: input data
     #list dataY [np.ndarray dataYi, dtype = np.float32]: supervised input for each layer
     dataX = np.empty((4, 2), dtype = np.float32)
     dataX[0] = (1, 1)
@@ -65,7 +65,7 @@ def getAverageRate(spikeRateListList, dataSize):
 def preTrain(SNN, dataX, dataY, forwardTime = 1000):
     #IN
     #network.supervised SNN: spiking neuron network
-    #np.ndarray dataX, dtype = np.flaot32: input data
+    #np.ndarray dataX, dtype = np.float32: input data
     #list dataY [np.ndarray dataYi, dtype = np.float32]: supervised input for each layer
     #int forwardTime: time to forward
     #OUT
@@ -79,11 +79,10 @@ def preTrain(SNN, dataX, dataY, forwardTime = 1000):
         spikeRateListList.append(SNN.spikeRateList)
     return spikeRateListList
 
-
 def train(SNN, dataX, dataY, iterNum, forwardTime = 1000, learningRate = 0.1, layerConstrainList = None, trainLayerSet = None):
     #IN
     #network.supervised SNN: spiking neuron network
-    #np.ndarray dataX, dtype = np.flaot32: input data
+    #np.ndarray dataX, dtype = np.float32: input data
     #list dataY [np.ndarray dataYi, dtype = np.float32]: supervised input for each layer
     #int iterNum: iteration to train
     #int forwardTime: time to forward
@@ -94,27 +93,28 @@ def train(SNN, dataX, dataY, iterNum, forwardTime = 1000, learningRate = 0.1, la
     #list spikeRateListList [[np.ndarray spikeRate, dtype = np.float32]]: [[spikeRate for each layer] for each input data]
     dataSize = dataX.shape[0]
     idxList = np.array(range(dataSize), dtype = np.int8)
-    # spikeRateListList = preTrain(SNN, dataX, dataY, forwardTime)
+    spikeRateListList = preTrain(SNN, dataX, dataY, forwardTime)
 
     for iters in range(iterNum):
+        averageSpikeRateList = getAverageRate(spikeRateListList, dataSize)
+        spikeRateListList = []
         print('iter %d: ' %iters)
         np.random.shuffle(idxList)
         for idx in idxList:
-            # print(' %d, %d: ' %(dataX[idx, 0].astype(np.int8), dataX[idx, 1].astype(np.int8)), end = '')
-            # #forward
-            # spikeRate = SNN.bcmPreUpdate(dataX[idx], dataY[idx], forwardTime)
-            # spikeRateListList.append(SNN.spikeRateList)
-            # print(spikeRate, end = '')
-            # # print(SNN.spikeRateList)
-            # #update
-            # SNN.bcmUpdate(averageSpikeRateList, learningRate, forwardTime, layerConstrainList, trainLayerSet)
-            # print(', ', end = '')
-            # #predict (for debug)
-            # SNN.reset()
-            # # SNN.refresh(refreshTime)
-            # spike = SNN.batchedPredict(dataX[idx], forwardTime)
-            # print(np.sum(spike, axis = 0).astype(np.float32) / forwardTime * 1000)
-            spikeRate = SNN.stdpTrain(dataX[idx], dataY[idx], forwardTime)
+            print(' %d, %d: ' %(dataX[idx, 0].astype(np.int8), dataX[idx, 1].astype(np.int8)), end = '')
+            #forward
+            spikeRate = SNN.bcmPreUpdate(dataX[idx], dataY[idx], forwardTime)
+            spikeRateListList.append(SNN.spikeRateList)
+            print(spikeRate, end = '')
+            # print(SNN.spikeRateList)
+            #update
+            SNN.bcmUpdate(averageSpikeRateList, learningRate, forwardTime, layerConstrainList, trainLayerSet)
+            print(', ', end = '')
+            #predict (for debug)
+            SNN.reset()
+            # SNN.refresh(refreshTime)
+            spike = SNN.batchedPredict(dataX[idx], forwardTime)
+            print(np.sum(spike, axis = 0).astype(np.float32) / forwardTime * 1000)
         SNN._printWeight()
         test(SNN, dataX, iterNum = 1, forwardTime = forwardTime)
     return SNN
@@ -122,7 +122,7 @@ def train(SNN, dataX, dataY, iterNum, forwardTime = 1000, learningRate = 0.1, la
 def test(SNN, dataX, iterNum, forwardTime = 1000, plot = False):
     #IN
     #network.supervised SNN: spiking neuron network
-    #np.ndarray dataX, dtype = np.flaot32: input data
+    #np.ndarray dataX, dtype = np.float32: input data
     #int iterNum: iteration to train
     #int forwardTime: time to forward
     #bool plot: True: plot spike list; False: no plot
@@ -201,7 +201,6 @@ def trainLayer2(SNN, capitance, resistance, vThreshold, forwardTime, learningRat
     dataX, dataY = getDataset(layerSize = 3)
     for i in range(4):
         print(dataX[i], dataY[i])
-
     SNN = train(SNN, dataX, dataY, iterNum = 5, forwardTime = forwardTime, learningRate = learningRate, layerConstrainList = [layer1Constrain, layer2Constrain], trainLayerSet = {1})
     SNN._printWeight()
     return SNN
