@@ -25,7 +25,7 @@ def getNetwork(fMin = 50, fMax = 100, capitance = 0.5, resistance = 64, vThresho
 
 def getDataset(layerSize):
     #OUT
-    #np.ndarray dataX, dtype = np.flaot32: input data
+    #np.ndarray dataX, dtype = np.float32: input data
     #list dataY [np.ndarray dataYi, dtype = np.float32]: supervised input for each layer
     dataX = np.empty((4, 2), dtype = np.float32)
     dataX[0] = (1, 1)
@@ -65,7 +65,7 @@ def getAverageRate(spikeRateListList, dataSize):
 def preTrain(SNN, dataX, dataY, forwardTime = 1000):
     #IN
     #network.supervised SNN: spiking neuron network
-    #np.ndarray dataX, dtype = np.flaot32: input data
+    #np.ndarray dataX, dtype = np.float32: input data
     #list dataY [np.ndarray dataYi, dtype = np.float32]: supervised input for each layer
     #int forwardTime: time to forward
     #OUT
@@ -82,7 +82,7 @@ def preTrain(SNN, dataX, dataY, forwardTime = 1000):
 def train(SNN, dataX, dataY, iterNum, forwardTime = 1000, learningRate = 0.1, layerConstrainList = None, trainLayerSet = None):
     #IN
     #network.supervised SNN: spiking neuron network
-    #np.ndarray dataX, dtype = np.flaot32: input data
+    #np.ndarray dataX, dtype = np.float32: input data
     #list dataY [np.ndarray dataYi, dtype = np.float32]: supervised input for each layer
     #int iterNum: iteration to train
     #int forwardTime: time to forward
@@ -122,7 +122,7 @@ def train(SNN, dataX, dataY, iterNum, forwardTime = 1000, learningRate = 0.1, la
 def test(SNN, dataX, iterNum, forwardTime = 1000, plot = False):
     #IN
     #network.supervised SNN: spiking neuron network
-    #np.ndarray dataX, dtype = np.flaot32: input data
+    #np.ndarray dataX, dtype = np.float32: input data
     #int iterNum: iteration to train
     #int forwardTime: time to forward
     #bool plot: True: plot spike list; False: no plot

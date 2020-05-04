@@ -229,6 +229,82 @@ class synapseLayer(object):
         print()
         return
 
+    def setWeight(self, settingFunction):
+        self.weight = settingFunction()
+        self.normalize()
+        return
+
+class simple2DConvolution(object):
+    #2D convolutional layer, stride = 1, pad = 0
+    def __init__(self, size, kernel):
+        #int size: number of neurons
+        #np.ndarray kernel, shape = (3, 3), dtype = float32: weight of recepitive field
+        super(simple2DConvolution, self).__init__()
+        self.size = size
+        self.kernel = kernel
+        self.kernelSize = self.kernel.shape
+        return
+
+    def forward(self, iData):
+        #generate input spikes
+        #IN
+        #np.ndarray iData, dtype = np.float32, shape = (size[0] + 2, size[0] + 2): n different inputs
+        #OUT
+        #np.ndarray cData, dtype = np.float32, shape = (size): convoluted data
+        cData = np.empty(self.size, dtype = np.float32)
+        for row in range(self.size[0]):
+            for col in range(self.size[1]):
+                cData[row, col] = np.sum(self.kernel * iData[row: row + self.kernelSize[0], col: col + self.kernelSize[1]])
+        return cData
+
+    def reset(self):
+        return
+
+class onOffLayer(object):
+    def __init__(self, row, col, kernel, kernelMax, fMin, fMax, dt = 0.5):
+        #int row: row of neurons
+        #int col: column of neurons
+        #np.ndarray kernel, shape = (3, 3), dtype = float32: weight of recepitive field
+        #float32 kernelMax: maximum value after convolution
+        #np.float32 fMin: mean firing rate with input 0, in Hz
+        #np.float32 fMax: mean firing rate with input 1, in Hz
+        #np.float32 dt: simulation step size in msec
+        super(onOffLayer, self).__init__()
+        self.row = row
+        self.col = col
+        self.size = row * col * 2
+        self.kernel = kernel
+        self.kernelMax = np.float32(kernelMax)
+        self.convolutionPart = simple2DConvolution((self.row, self.col), kernel)
+        self.poissonPart = poissonInput(self.size, fMin, fMax, dt)
+        return
+
+    def forward(self, iData):
+        #generate input spikes
+        #IN
+        #np.ndarray iData, dtype = np.float32, shape = (n, ): n different inputs
+        #OUT
+        #np.ndarray spikeList, dtype = np.bool, shape = (n, ): True: fire; False: not fire
+        #compute convolution
+        cData = self.convolutionPart.forward(iData)
+        #compute on/off
+        c0Data = -1 * np.copy(cData)
+        c1Data = np.copy(cData)
+        mask = cData < 0
+        c1Data[mask] = 0
+        c0Data[~mask] = 0
+        #reshape to 1d
+        iData = np.empty(self.size, dtype = np.float32)
+        iData[: self.row * self.col] = c0Data.reshape(-1)
+        iData[self.row * self.col :] = c1Data.reshape(-1)
+        iData = iData / self.kernelMax
+        #compute spike
+        spikeList = self.poissonPart.forward(iData)
+        return spikeList
+
+    def reset(self):
+        self.convolutionPart.reset()
+        self.poissonPart.reset()
 
 
 if __name__ == '__main__':
