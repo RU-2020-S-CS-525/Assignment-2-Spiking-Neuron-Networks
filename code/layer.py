@@ -63,7 +63,7 @@ class forwardLIF(object):
         self.factor2 = 1 - self.factor1 / self.resistance
         return
 
-    def forward(self, tempCurrentList, supervisedCurrentList):
+    def forward(self, tempCurrentList, supervisedCurrentList=None):
         #generate spikes given injected currents
         #IN
         #np.ndarray tempCurrentList, dtype = np.float32, shape = (n, ): n different input currents in μA
@@ -113,6 +113,10 @@ class supervisedLIF(object):
         #np.ndarray spikeList, dtype = np.bool, shape = (n, ): True: fire; False: not fire
         if supervisedCurrentList is not None:
             tempCurrentList = tempCurrentList + supervisedCurrentList
+            #spikeList = supervisedCurrentList > 0
+            #self.tempVoltageList[spikeList] = self.vRest
+            #return spikeList
+            #print(self.tempVoltageList)
         self.tempVoltageList = self.factor1 * tempCurrentList + self.tempVoltageList * self.factor2
         spikeList = self.tempVoltageList >= self.vThreshold
         self.tempVoltageList[spikeList] = self.vRest
@@ -194,6 +198,31 @@ class synapseLayer(object):
         self.weight = self.weight + dw * forwardTime
         self.normalize()
         return
+
+    def stdpUpdate(self, prevSpikeList, postSpikeList, learningRate, tau_x, tau_y, F_x, F_y):
+        stepNum, n_neuron_pre = prevSpikeList.shape
+        _, n_neuron_post = postSpikeList.shape
+        trace_pre = np.zeros((n_neuron_pre,1))
+        trace_post = np.zeros((n_neuron_post,1))
+        for j in range(n_neuron_pre):
+            for i in range(n_neuron_post):
+                for t in range(stepNum):
+                    trace_pre[j] = trace_pre[j] * (1 - self.dt / tau_x) + prevSpikeList[t][j]
+                    trace_post[i] = trace_post[i] * (1 - self.dt / tau_y) + postSpikeList[t][i]
+                    dw = F_x * trace_pre[j] * postSpikeList[t][i] - F_y * trace_post[i] * prevSpikeList[t][j]
+                    if prevSpikeList[t][j] or postSpikeList[t][i]:
+                        #print(trace_pre[j], trace_post[i], dw)
+                        #print(j, i, dw)
+                        pass
+                    self.weight[j,i] += dw
+                self.normalize()
+                #self.stdpNormalize()
+        return
+
+    def stdpNormalize(self):
+        self.weight = np.abs(self.weight) / np.sum(np.abs(self.weight), axis = 0, keepdims = True)
+        return
+
 
     def printWeight(self):
         print(self.weight)

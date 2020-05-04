@@ -5,7 +5,8 @@ from utility import *
 
 class supervised(object):
     #supervised network
-    def __init__(self, neuronLayerList, minSupervisedCurrent = -1, maxSupervisedCurrent = 1, synapseConfig = None, dt = 0.5):
+    def __init__(self, neuronLayerList, minSupervisedCurrent = -1, maxSupervisedCurrent = 1, synapseConfig = None, dt = 0.5,
+                 learningRate = 0.1):
         #list neuronLayerList [layer]: neuron layers
         #np.float32 minSupervisedCurrent: min supervised input current with 0, in μA
         #np.float32 maxSupervisedCurrent: max supervised input current with 1, in μA
@@ -17,6 +18,7 @@ class supervised(object):
         self.maxSupervisedCurrent = np.float32(maxSupervisedCurrent)
         self.synapseConfig = dict() if synapseConfig is None else synapseConfig
         self.dt = dt
+        self.learningRate = learningRate
 
         #int layerNum: number of layers, excluding input layer
         #np.float32 maxSupervisedCurrent: range of supervised input current, in μA
@@ -58,6 +60,7 @@ class supervised(object):
         supervisedCurrent = self._getSupervisedCurrent(supervisedIDataList[-1])
         oData = self.neuronLayerList[-1].forward(iData, supervisedCurrent)
         self.spikeListList[-1][stepIdx] = oData
+        #print(supervisedCurrent, oData)
         return oData
 
     def batchedForward(self, iData, supervisedIDataList, time):
@@ -171,6 +174,19 @@ class supervised(object):
         self.neuronLayerList.append(tempNeuronLayer)
         self.synapseLayerList.append(tempSynapseLayer)
         self.layerNum = self.layerNum + 1
+        return
+
+    def stdpTrain(self, iData, supervisedIData, stdp_config, forwardTime = 1000, refreshTime = 300):
+        self.refresh(refreshTime)
+        spikeList = self.batchedForward(iData, supervisedIData, forwardTime)
+        self.stdpUpdate(forwardTime, stdp_config)
+        return spikeList
+
+    def stdpUpdate(self, time, stdp_config):
+        for synapseIdx in range(self.layerNum):
+            prevSpikeList = self.spikeListList[synapseIdx]
+            postSpikeList = self.spikeListList[synapseIdx + 1]
+            self.synapseLayerList[synapseIdx].stdpUpdate(prevSpikeList, postSpikeList, self.learningRate, **stdp_config)
         return
 
 
