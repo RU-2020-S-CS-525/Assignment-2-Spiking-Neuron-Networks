@@ -79,6 +79,27 @@ class forwardLIF(object):
         return
 
 
+class fixedNeuron(object):
+    def __init__(self, size, fMin, fMax, capitance = 1, resistance = 20, vRest = 0, vThreshold = 25, dt = 0.5):
+        super(fixedNeuron, self).__init__()
+        self.dt = dt
+        self.poisson_neuron = poissonInput(size = 1, fMin = fMin, fMax = fMax)
+        self.lif = forwardLIF(size = 1, capitance = capitance, resistance = resistance, vRest = vRest, vThreshold = vThreshold)
+        self.size = 1
+
+    def forward(self, tempCurrentList, supervisedCurrentList):
+        if supervisedCurrentList is not None:
+            supervisedCurrentList = int(supervisedCurrentList + 1) >> 1
+            spikeList = self.poisson_neuron.forward(supervisedCurrentList)
+        else:
+            spikeList = self.lif.forward(tempCurrentList)
+        #print(supervisedCurrentList, spikeList)
+        return spikeList
+
+    def reset(self):
+        pass
+
+
 class supervisedLIF(object):
     #feedForward LIF layer with supervised input
     def __init__(self, size, capitance = 1, resistance = 20, vRest = 0, vThreshold = 25, dt = 0.5):
@@ -204,6 +225,9 @@ class synapseLayer(object):
         _, n_neuron_post = postSpikeList.shape
         trace_pre = np.zeros((n_neuron_pre,1))
         trace_post = np.zeros((n_neuron_post,1))
+        latency = 5
+        for t in range(latency):
+            postSpikeList = np.insert(postSpikeList, 0, False, axis = 0)
         for j in range(n_neuron_pre):
             for i in range(n_neuron_post):
                 for t in range(stepNum):
@@ -215,7 +239,7 @@ class synapseLayer(object):
                         #print(j, i, dw)
                         pass
                     self.weight[j,i] += dw
-                self.normalize()
+        self.normalize()
                 #self.stdpNormalize()
         return
 
