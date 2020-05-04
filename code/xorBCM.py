@@ -4,10 +4,12 @@ from layer import *
 from network import *
 from utility import *
 
-def getNetwork(fMin = 50, fMax = 100, vThreshold = 25, tau = 10, minSupervisedCurrent = -1, maxSupervisedCurrent = 1):
+def getNetwork(fMin = 50, fMax = 100, capitance = 0.5, resistance = 64, vThreshold = 25, tau = 10, minSupervisedCurrent = -1, maxSupervisedCurrent = 1):
     #IN
     #np.float32 fMin: mean firing rate with input 0, in Hz
     #np.float32 fMax: mean firing rate with input 1, in Hz
+    #np.float32 capitance: C_m in μF
+    #np.float32 resistance: R_m in kΩ
     #np.float32 vThreshold: threshold voltage V_t in mV
     #np.float32 tau: time constant for spike response
     #np.float32 minSupervisedCurrent: min supervised input current with 0, in μA
@@ -16,7 +18,7 @@ def getNetwork(fMin = 50, fMax = 100, vThreshold = 25, tau = 10, minSupervisedCu
     #network.supervised SNN: spiking neuron network
     neuronLayerList = []
     neuronLayerList.append(poissonInput(2, fMin = fMin, fMax = fMax))
-    neuronLayerList.append(supervisedLIF(2, vThreshold = vThreshold))
+    neuronLayerList.append(supervisedLIF(2, capitance = capitance, resistance = resistance, vThreshold = vThreshold))
     # neuronLayerList.append(supervisedLIF(1, vThreshold = vThreshold))
     SNN = supervised(neuronLayerList, minSupervisedCurrent, maxSupervisedCurrent, synapseConfig = {'tau': tau})
     return SNN
@@ -163,10 +165,12 @@ def layer2Constrain(weight):
     return tempWeight
 
 
-def trainLayer1(fMin, fMax, vThreshold, tau, minSupervisedCurrent, maxSupervisedCurrent, forwardTime, learningRate):
+def trainLayer1(fMin, fMax, capitance, resistance, vThreshold, tau, minSupervisedCurrent, maxSupervisedCurrent, forwardTime, learningRate):
     #IN
     #np.float32 fMin: mean firing rate with input 0, in Hz
     #np.float32 fMax: mean firing rate with input 1, in Hz
+    #np.float32 capitance: C_m in μF
+    #np.float32 resistance: R_m in kΩ
     #np.float32 vThreshold: threshold voltage V_t in mV
     #np.float32 tau: time constant for spike response
     #np.float32 minSupervisedCurrent: min supervised input current with 0, in μA
@@ -175,7 +179,7 @@ def trainLayer1(fMin, fMax, vThreshold, tau, minSupervisedCurrent, maxSupervised
     #np.float32 learningRate: step size for changing weights
     #OUT
     #network.supervised SNN: 2-layer spiking neuron network
-    SNN = getNetwork(fMin, fMax, vThreshold, tau, minSupervisedCurrent, maxSupervisedCurrent)
+    SNN = getNetwork(fMin, fMax, capitance, resistance, vThreshold, tau, minSupervisedCurrent, maxSupervisedCurrent)
     dataX, dataY = getDataset(layerSize = 2)
     for i in range(4):
         print(dataX[i], dataY[i])
@@ -183,15 +187,17 @@ def trainLayer1(fMin, fMax, vThreshold, tau, minSupervisedCurrent, maxSupervised
     SNN._printWeight()
     return SNN
 
-def trainLayer2(SNN, vThreshold, forwardTime, learningRate):
+def trainLayer2(SNN, capitance, resistance, vThreshold, forwardTime, learningRate):
     #IN
     #network.supervised SNN: 2-layer spiking neuron network
+    #np.float32 capitance: C_m in μF
+    #np.float32 resistance: R_m in kΩ
     #np.float32 vThreshold: threshold voltage V_t in mV
     #int forwardTime: time to forward
     #np.float32 learningRate: step size for changing weights
     #OUT
     #network.supervised SNN: 3-layer spiking neuron network
-    SNN.extend(supervisedLIF(1, vThreshold = vThreshold))
+    SNN.extend(supervisedLIF(1, capitance = capitance, resistance = resistance, vThreshold = vThreshold))
     dataX, dataY = getDataset(layerSize = 3)
     for i in range(4):
         print(dataX[i], dataY[i])
@@ -205,6 +211,8 @@ if __name__ == '__main__':
     np.random.seed(6983)
     fMin = 100
     fMax = 200
+    capitance = 0.5
+    resistance = 64
     vThreshold = 12
     tau = 8
     minSupervisedCurrent = -4
@@ -213,9 +221,9 @@ if __name__ == '__main__':
     learningRate = 8e-10
 
     print('train layer 1')
-    SNN = trainLayer1(fMin, fMax, vThreshold, tau, minSupervisedCurrent, maxSupervisedCurrent, forwardTime, learningRate)
+    SNN = trainLayer1(fMin, fMax, capitance, resistance ,vThreshold, tau, minSupervisedCurrent, maxSupervisedCurrent, forwardTime, learningRate)
     print('train layer 2')
-    SNN = trainLayer2(SNN, vThreshold, forwardTime, learningRate)
+    SNN = trainLayer2(SNN, capitance, resistance, vThreshold, forwardTime, learningRate)
     dataX, _ = getDataset(layerSize = 3)
     print('test')
     SNN = test(SNN, dataX, iterNum = 5, forwardTime = 1000, plot = True)
