@@ -1,7 +1,7 @@
 # RU-2020-S-CS-525-Assignment-2
 
 ## Description
-This is a git repository for **CS 525 Assignment 1**. We mainly code in Python in this project.
+This is a git repository for **CS 525 Assignment 2**. We mainly code in Python in this project.
 
 ## File Structure
 ```
