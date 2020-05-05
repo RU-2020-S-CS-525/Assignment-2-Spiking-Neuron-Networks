@@ -79,27 +79,6 @@ class forwardLIF(object):
         return
 
 
-class fixedNeuron(object):
-    def __init__(self, size, fMin, fMax, capitance = 1, resistance = 20, vRest = 0, vThreshold = 25, dt = 0.5):
-        super(fixedNeuron, self).__init__()
-        self.dt = dt
-        self.poisson_neuron = poissonInput(size = 1, fMin = fMin, fMax = fMax)
-        self.lif = forwardLIF(size = 1, capitance = capitance, resistance = resistance, vRest = vRest, vThreshold = vThreshold)
-        self.size = 1
-
-    def forward(self, tempCurrentList, supervisedCurrentList):
-        if supervisedCurrentList is not None:
-            supervisedCurrentList = int(supervisedCurrentList + 1) >> 1
-            spikeList = self.poisson_neuron.forward(supervisedCurrentList)
-        else:
-            spikeList = self.lif.forward(tempCurrentList)
-        #print(supervisedCurrentList, spikeList)
-        return spikeList
-
-    def reset(self):
-        pass
-
-
 class supervisedLIF(object):
     #feedForward LIF layer with supervised input
     def __init__(self, size, capitance = 1, resistance = 20, vRest = 0, vThreshold = 25, dt = 0.5):
@@ -158,7 +137,7 @@ class synapseLayer(object):
         super(synapseLayer, self).__init__()
         self.prevSize = prevSize
         self.postSize = postSize
-        self.tau = np.float32(tau)
+        self.tau = np.float32(tau) / dt
         self.dt = dt
 
         #np.ndarray weight, dtype = np.float32, shape = (2, prevSize, postSize): inhibitatory and excitatory synapses.
