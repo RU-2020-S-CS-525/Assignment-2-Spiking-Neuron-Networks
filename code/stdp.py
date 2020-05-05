@@ -10,7 +10,7 @@ from xorBCM import getDataset
 import random
 
 
-def getNetwork(fMin = 20, fMax = 100, capitance = 1, resistance = 1, vThreshold = 5, vRest = -65, tau = 10, minSupervisedCurrent =
+def getNetwork(fMin = 50, fMax = 250, capitance = 1, resistance = 1, vThreshold = 0.7, vRest = 0, tau = 20, minSupervisedCurrent =
                -1, maxSupervisedCurrent = 1, learningRate = 1, dt = 1e-3):
     #IN
     #np.float32 fMin: mean firing rate with input 0, in Hz
@@ -25,9 +25,9 @@ def getNetwork(fMin = 20, fMax = 100, capitance = 1, resistance = 1, vThreshold 
     #network.supervised SNN: spiking neuron network
     neuronLayerList = []
     neuronLayerList.append(poissonInput(2, fMin = fMin, fMax = fMax))
-    neuronLayerList.append(supervisedLIF(2, capitance = capitance, resistance = resistance, vThreshold = vThreshold, dt = dt, vRest =
+    neuronLayerList.append(LIF(10, capitance = capitance, resistance = resistance, vThreshold = 0.9, dt = dt, vRest =
                                         vRest))
-    neuronLayerList.append(supervisedLIF(1, capitance = capitance, resistance = resistance, vThreshold = vThreshold, dt = dt, vRest =
+    neuronLayerList.append(LIF(1, capitance = capitance, resistance = resistance, vThreshold = 0.25, dt = dt, vRest =
                                         vRest))
     SNN = supervised(neuronLayerList, minSupervisedCurrent, maxSupervisedCurrent, learningRate = learningRate, dt = dt, synapseConfig
                      = {'tau': tau, 'dt': dt})
@@ -53,13 +53,14 @@ def train(SNN, dataX, dataY, iterNum, stdp_config, forwardTime = 1000, refreshTi
             np.random.shuffle(idxList)
             for idx in idxList:
                 print(' %d, %d: ' %(dataX[idx, 0].astype(np.int8), dataX[idx, 1].astype(np.int8)), end = '')
-                spike = SNN.stdpTrain(dataX[idx], dataY[idx], stdp_config, forwardTime, refreshTime)
+                spike = SNN.spStdpTrain(dataX[idx], dataY[idx][2], stdp_config, forwardTime, refreshTime)
                 print('%.2f' %(np.sum(spike).astype(np.float16)), end = ', ')
                 #print('%.2f %.2f' %(np.sum(SNN.spikeListList[0][:,0]).astype(np.float16), np.sum(SNN.spikeListList[0][:,1]).astype(np.float16)), end = ', ')
                 spike = SNN.batchedPredict(dataX[idx], forwardTime)
                 print('%.2f' %(np.sum(spike).astype(np.float16)))
-        except KeyboardInterrupt:
             SNN._printWeight()
+        except KeyboardInterrupt:
+
             if input('exit training?') == 'y':
                 return
     return
@@ -83,9 +84,9 @@ if __name__ == "__main__":
     np.random.seed(114514)
 
     n_iter = 100
-    tau_x = 2e-2
-    tau_y = 2e-2
-    F_x = 0.01
+    tau_x = 5e-3
+    tau_y = 5e-3
+    F_x = 0.005
     F_y = 1.05*F_x
     stdp_config = {
         'tau_x': tau_x,
@@ -102,7 +103,7 @@ if __name__ == "__main__":
     SNN = getNetwork(learningRate = learningRate, dt = dt)
     SNN._printWeight()
     print('---- START TRAINING ----')
-    train(SNN, dataX, dataY, n_iter, stdp_config, forwardTime=1, refreshTime=1)
+    train(SNN, dataX, dataY, 30, stdp_config, forwardTime=2, refreshTime=1)
     SNN._printWeight()
     print('---- TESTING ----')
-    test(SNN, dataX, forwardTime=1)
+    test(SNN, dataX, forwardTime=2)

@@ -137,7 +137,7 @@ class synapseLayer(object):
         super(synapseLayer, self).__init__()
         self.prevSize = prevSize
         self.postSize = postSize
-        self.tau = np.float32(tau) / dt
+        self.tau = np.float32(tau)
         self.dt = dt
 
         #np.ndarray weight, dtype = np.float32, shape = (2, prevSize, postSize): inhibitatory and excitatory synapses.
@@ -214,9 +214,42 @@ class synapseLayer(object):
                         #print(trace_pre[j], trace_post[i], dw)
                         #print(j, i, dw)
                         pass
-                    self.weight[j,i] += dw
-                self.normalize()
+                    self.weight[j, i] += dw
+                # self.normalize()
                 #self.stdpNormalize()
+        return
+
+    def spStdpUpdate(self, prevSpikeList, postSpikeList, learningRate, tau_x, tau_y, F_x, F_y, supervisedSpikes = None):
+        stepNum, n_neuron_pre = prevSpikeList.shape
+        _, n_neuron_post = postSpikeList.shape
+        trace_pre = np.zeros((n_neuron_pre,1))
+        trace_post = np.zeros((n_neuron_post,1))
+        if supervisedSpikes == None:
+            for j in range(n_neuron_pre):
+                for i in range(n_neuron_post):
+                    for t in range(stepNum):
+                        trace_pre[j] = trace_pre[j] * (1 - self.dt / tau_x) + prevSpikeList[t][j]
+                        trace_post[i] = trace_post[i] * (1 - self.dt / tau_y) + postSpikeList[t][i]
+                        dw = F_x * trace_pre[j] * postSpikeList[t][i] - F_y * trace_post[i] * prevSpikeList[t][j]
+                        if prevSpikeList[t][j] or postSpikeList[t][i]:
+                            #print(trace_pre[j], trace_post[i], dw)
+                            #print(j, i, dw)
+                            pass
+                        self.weight[j, i] += dw
+                    # self.normalize()
+                    #self.stdpNormalize()
+        else:
+            for j in range(n_neuron_pre):
+                for i in range(n_neuron_post):
+                    for t in range(stepNum):
+                        trace_pre[j] = trace_pre[j] * (1 - self.dt / tau_x) + prevSpikeList[t][j]
+                        trace_post[i] = trace_post[i] * (1 - self.dt / tau_y) + postSpikeList[t][i]
+                        dw = (supervisedSpikes[t][i].astype(np.int8) - postSpikeList[t][i].astype(np.int8)) * F_x * trace_pre[j]
+                        if prevSpikeList[t][j] or postSpikeList[t][i]:
+                            #print(trace_pre[j], trace_post[i], dw)
+                            #print(j, i, dw)
+                            pass
+                        self.weight[j, i] += dw
         return
 
     def stdpNormalize(self):

@@ -77,6 +77,40 @@ class supervised(object):
             self._forward(iData, supervisedIDataList, stepIdx)
         return self.spikeListList[-1]
 
+    def _spForward(self, iData, stepIdx):
+        #IN
+        #np.ndarray iData, dtype = np.float32: input data
+        #list supervisedIDataList, [np.ndarray supervisedIData, dtype = np.float32]: supervised input data for each layer
+        #int stepIdx: step index
+        #OUT
+        #np.ndarray oData, dtype = np.float32: output data
+        for layerIdx in range(self.layerNum):
+            tempNeuronLayer = self.neuronLayerList[layerIdx]
+            tempSynapseLayer = self.synapseLayerList[layerIdx]
+            tempSpikeList = self.spikeListList[layerIdx]
+
+            oData = tempNeuronLayer.forward(iData)
+            tempSpikeList[stepIdx] = oData
+            iData = tempSynapseLayer.forward(oData)
+
+        oData = self.neuronLayerList[-1].forward(iData)
+        self.spikeListList[-1][stepIdx] = oData
+        #print(supervisedCurrent, oData)
+        return oData
+
+    def spBatchedForward(self, iData, time):
+        #IN
+        #np.ndarray iData, dtype = np.float32: input data
+        #list supervisedIDataList, [np.ndarray supervisedIData, dtype = np.float32]: supervised input data for each layer
+        #int time: time to forward
+        #OUT
+        #np.ndarray oData, dtype = np.float32: output data
+        stepNum = int(time / self.dt)
+        self.spikeListList = [np.empty((stepNum, self.neuronLayerList[i].size), dtype = np.bool) for i in range(self.layerNum + 1)]
+
+        for stepIdx in range(stepNum):
+            self._spForward(iData, stepIdx)
+        return self.spikeListList[-1]
 
     def _predict(self, iData, stepIdx):
         #IN
@@ -103,6 +137,7 @@ class supervised(object):
         #int time: time to predict
         #OUT
         #np.ndarray oData, dtype = np.float32: output data
+        self.reset()
         stepNum = int(time / self.dt)
         self.spikeListList = [np.empty((stepNum, self.neuronLayerList[i].size), dtype = np.bool) for i in range(self.layerNum + 1)]
 
@@ -177,7 +212,7 @@ class supervised(object):
         return
 
     def stdpTrain(self, iData, supervisedIData, stdp_config, forwardTime = 1000, refreshTime = 300):
-        self.refresh(refreshTime)
+        self.reset()
         spikeList = self.batchedForward(iData, supervisedIData, forwardTime)
         self.stdpUpdate(forwardTime, stdp_config)
         return spikeList
@@ -189,6 +224,28 @@ class supervised(object):
             self.synapseLayerList[synapseIdx].stdpUpdate(prevSpikeList, postSpikeList, self.learningRate, **stdp_config)
         return
 
+    def spStdpTrain(self, iData, supervisedIData, stdp_config, forwardTime = 1000, refreshTime = 300):
+        self.reset()
+        spikeList = self.spBatchedForward(iData, forwardTime)
+        self.spStdpUpdate(forwardTime, stdp_config, supervisedIData)
+        return spikeList
+
+    def spStdpUpdate(self, time, stdp_config, supervisedIData):
+        for synapseIdx in range(self.layerNum - 1):
+            prevSpikeList = self.spikeListList[synapseIdx]
+            postSpikeList = self.spikeListList[synapseIdx + 1]
+            self.synapseLayerList[synapseIdx].spStdpUpdate(prevSpikeList, postSpikeList, self.learningRate, **stdp_config)
+        supervisedSpikes = self._getSupervisedSpikes(supervisedIData, time)
+        prevSpikeList = self.spikeListList[self.layerNum - 1]
+        postSpikeList = self.spikeListList[self.layerNum]
+        self.synapseLayerList[self.layerNum - 1].spStdpUpdate(prevSpikeList, postSpikeList, self.learningRate, supervisedSpikes = supervisedSpikes, **stdp_config)
+        return
+    def _getSupervisedSpikes(self, data, time):
+        p = poissonInput(size=1, fMin=50, fMax=250, dt=1)
+        spikes = []
+        for i in range(int(time / self.dt)):
+            spikes.append(p.forward(data))
+        return spikes
 
 if __name__ == '__main__':
     time = 1000
