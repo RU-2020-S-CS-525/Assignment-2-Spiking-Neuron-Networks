@@ -37,11 +37,11 @@ def getDataset(layerSize):
 
     dataYList.append([0 for i in range(4)])
     #supervised idata for layer 1. here I use ((~x0) and x1, x0 and (not x1)). Maybe (x0 nand x1, x0 or x1) is better
-    dataYList.append(np.array(     ((~dataX[:, 0].astype(np.bool) | ~dataX[:, 1].astype(np.bool)).astype(np.float32),
-                                    (dataX[:, 0].astype(np.bool) | dataX[:, 1].astype(np.bool)).astype(np.float32)), dtype = np.float32).transpose())
+    dataYList.append(np.array(     ((~dataX[:, 0].astype(np.bool) & dataX[:, 1].astype(np.bool)).astype(np.float32),
+                                    (dataX[:, 0].astype(np.bool) & ~dataX[:, 1].astype(np.bool)).astype(np.float32)), dtype = np.float32).transpose())
     # dataYList.append(np.array(     ((~dataX[:, 0].astype(np.bool) | ~dataX[:, 1].astype(np.bool)).astype(np.float32),
     #                                 (dataX[:, 0].astype(np.bool) | dataX[:, 1].astype(np.bool)).astype(np.float32)), dtype = np.float32).transpose())
-    dataYList.append((dataYList[1][:, 0].astype(np.bool) & dataYList[1][:, 1].astype(np.bool)).astype(np.float32))
+    dataYList.append((dataX[:, 0].astype(np.bool) ^ dataX[:, 1].astype(np.bool)).astype(np.float32))
     # dataY = [(dataY0[i], dataY1[i], dataY2[i]) for i in range(4)]
     dataY = [[dataYList[layer][i] for layer in range(layerSize)] for i in range(4)]
     return dataX, dataY
