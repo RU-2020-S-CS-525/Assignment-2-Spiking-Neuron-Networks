@@ -145,6 +145,7 @@ def test(SNN, dataX, iterNum, forwardTime = 1000, plot = False, legend = True, f
             testResult[iters][idx] = rate
             if plot is True:
                 plotSpikeList(SNN.spikeListList, legend = legend, fn_save = fn_save + '.input%d.iter%d' %(idx, iters))
+    testResult = np.array(testResult)
     return testResult
 
 
@@ -215,6 +216,8 @@ def trainLayer2(SNN, capitance, resistance, vThreshold, forwardTime, learningRat
 
 if __name__ == '__main__':
     np.random.seed(6983)
+    color = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+
     fMin = 100
     fMax = 200
     capitance = 0.5
@@ -232,4 +235,25 @@ if __name__ == '__main__':
     SNN = trainLayer2(SNN, capitance, resistance, vThreshold, forwardTime, learningRate)
     dataX, _ = getDataset(layerSize = 3)
     print('\ntest')
-    SNN = test(SNN, dataX, iterNum = 5, forwardTime = 1000, plot = True, fn_save = 'xorBCM')
+    fn_save = 'xorBCM'
+    result = test(SNN, dataX, iterNum = 50, forwardTime = 1000, plot = False, fn_save = fn_save)
+
+    iterNum, dataSize, neuronNum = result.shape
+    xAxis = np.arange(dataSize)
+    xIdx = np.argsort(xAxis)
+    for iters in range(iterNum):
+        for idx in range(neuronNum):
+            point = plt.scatter(xAxis[xIdx], result[iters, xIdx, idx], c = color[idx], marker = '.')
+
+    meanResult = np.mean(result, axis = 0)
+    for idx in range(neuronNum):
+        point = plt.scatter(xAxis[xIdx], result[iters, xIdx, idx], c = color[idx], marker = 'o')
+        point.set_label('neuron ' + str(idx))
+
+    plt.xlabel('inputs')
+    plt.ylabel('firing rate')
+    plt.legend(loc = 0)
+    plt.title('xor')
+    plt.tight_layout()
+    plt.savefig('../docs/plots/' + fn_save + '.iter%d' %iters + '.rate.png')
+    plt.show()

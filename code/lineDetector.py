@@ -96,40 +96,51 @@ if __name__ == '__main__':
     print('\ntest different angles')
     fn_save = 'lineAng'
     dataX = np.array(lineData().dataX, dtype = np.float32)
-    result = test(SNN, dataX, 1, forwardTime = 1000, plot = True, legend = False, fn_save = fn_save)
+    result = test(SNN, dataX, 5, forwardTime = 1000, plot = False, legend = False, fn_save = fn_save)
 
     iterNum, dataSize, neuronNum = result.shape
     xAxis = (np.arange(dataSize) * 20 + 90) % 180 - 90
     xIdx = np.argsort(xAxis)
     for iters in range(iterNum):
         for idx in range(neuronNum):
-            line, = plt.plot(xAxis[xIdx], result[iters, xIdx, idx], c = color[idx], marker = 'o')
-            line.set_label('neuron ' + str(idx))
-        plt.xlabel('angles(degree)')
-        plt.ylabel('firing rate')
-        plt.legend(loc = 0)
-        plt.title('line detector')
-        plt.tight_layout()
-        plt.savefig('../docs/plots/' + fn_save + '.iter%d' %iters + '.rate.png')
-        plt.show()
+            point = plt.scatter(xAxis[xIdx], result[iters, xIdx, idx], c = color[idx], marker = '.')
+
+    meanResult = np.mean(result, axis = 0)
+    for idx in range(neuronNum):
+        line, = plt.plot(xAxis[xIdx], meanResult[xIdx, idx], c = color[idx], marker = 'o')
+        line.set_label('neuron ' + str(idx))
+
+    plt.xlabel('angles(degree)')
+    plt.ylabel('firing rate')
+    plt.legend(loc = 0)
+    plt.title('line detector')
+    plt.tight_layout()
+    plt.savefig('../docs/plots/' + fn_save + '.iter%d' %iters + '.rate.png')
+    plt.show()
 
 
     #different positions
     print('\ntest different positions')
     fn_save = 'linePos'
     dataX = np.array(extendLineData().dataX, dtype = np.float32)
-    result = test(SNN, dataX, 1, forwardTime = 1000, plot = True, legend = False, fn_save = fn_save)
+    result = test(SNN, dataX, 5, forwardTime = 1000, plot = False, legend = False, fn_save = fn_save)
 
     iterNum, dataSize, neuronNum = result.shape
     xAxis = np.arange(dataSize) + 1
+    xIdx = np.argsort(xAxis)
     for iters in range(iterNum):
         for idx in range(neuronNum):
-            line, = plt.plot(xAxis, result[iters, :, idx], c = color[idx], marker = 'o')
-            line.set_label('neuron ' + str(idx))
-        plt.xlabel('positions')
-        plt.ylabel('firing rate')
-        plt.legend(loc = 0)
-        plt.title('line detector')
-        plt.tight_layout()
-        plt.savefig('../docs/plots/' + fn_save + '.iter%d' %iters + '.rate.png')
-        plt.show()
+            point = plt.scatter(xAxis[xIdx], result[iters, xIdx, idx], c = color[idx], marker = '.')
+
+    meanResult = np.mean(result, axis = 0)
+    for idx in range(neuronNum):
+        line, = plt.plot(xAxis[xIdx], meanResult[xIdx, idx], c = color[idx], marker = 'o')
+        line.set_label('neuron ' + str(idx))
+
+    plt.xlabel('positions')
+    plt.ylabel('firing rate')
+    plt.legend(loc = 0)
+    plt.title('line detector')
+    plt.tight_layout()
+    plt.savefig('../docs/plots/' + fn_save + '.iter%d' %iters + '.rate.png')
+    plt.show()
