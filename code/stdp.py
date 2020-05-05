@@ -1,13 +1,11 @@
-"""
-This module contains classes that can learn the weights.
-"""
-
 import numpy as np
-from layer import poissonInput
+from layer import poissonInput, fixedNeuron
 from layer import forwardLIF as LIF, supervisedLIF, synapseLayer
 from network import supervised
 from xorBCM import getDataset
+from utility import plotSpike
 import random
+from tqdm import tqdm
 
 
 def getNetwork(fMin = 50, fMax = 250, capitance = 1, resistance = 1, vThreshold = 0.7, vRest = 0, tau = 20, minSupervisedCurrent =
@@ -34,28 +32,33 @@ def getNetwork(fMin = 50, fMax = 250, capitance = 1, resistance = 1, vThreshold 
     return SNN
 
 
-#def getDataset():
-#    dataX = np.empty((4, 2), dtype = np.float16)
-#    dataX[0] = (1, 1)
-#    dataX[1] = (1, 0)
-#    dataX[2] = (0, 1)
-#    dataX[3] = (0, 0)
-#    dataY = (dataX[:, 0].astype(np.bool) ^ dataX[:, 1].astype(np.bool)).astype(np.float16)
-#    return dataX, dataY
+def beforeTrain(SNN, fMin = 20, fMax = 100, capitance = 1, resistance = 1, vThreshold = 5, vRest = -65, tau = 10, minSupervisedCurrent =
+               -1, maxSupervisedCurrent = 1, learningRate = 1, dt = 1e-3):
+    SNN.neuronLayerList.pop()
+    SNN.neuronLayerList.append(fixedNeuron(1, fMin = fMin, fMax = fMax, capitance = capitance, resistance = resistance, vThreshold = vThreshold, dt = dt, vRest =
+                                        vRest))
+
+
+def afterTrain(SNN, fMin = 20, fMax = 100, capitance = 1, resistance = 1, vThreshold = 5, vRest = -65, tau = 10, minSupervisedCurrent =
+               -1, maxSupervisedCurrent = 1, learningRate = 1, dt = 1e-3):
+    SNN.neuronLayerList.pop()
+    SNN.neuronLayerList.append(LIF(1, capitance = capitance, resistance = resistance, vThreshold = vThreshold, dt = dt, vRest =
+                                        vRest))
 
 
 def train(SNN, dataX, dataY, iterNum, stdp_config, forwardTime = 1000, refreshTime = 1000):
     dataSize = dataX.shape[0]
     idxList = np.array(range(dataSize), dtype = np.int8)
-    for iters in range(iterNum):
+    for iters in tqdm(range(iterNum)):
         try:
             print('iter %d: ' %iters)
             np.random.shuffle(idxList)
             for idx in idxList:
+                SNN.reset()
                 print(' %d, %d: ' %(dataX[idx, 0].astype(np.int8), dataX[idx, 1].astype(np.int8)), end = '')
                 spike = SNN.spStdpTrain(dataX[idx], dataY[idx][2], stdp_config, forwardTime, refreshTime)
                 print('%.2f' %(np.sum(spike).astype(np.float16)), end = ', ')
-                #print('%.2f %.2f' %(np.sum(SNN.spikeListList[0][:,0]).astype(np.float16), np.sum(SNN.spikeListList[0][:,1]).astype(np.float16)), end = ', ')
+                SNN.reset()
                 spike = SNN.batchedPredict(dataX[idx], forwardTime)
                 print('%.2f' %(np.sum(spike).astype(np.float16)))
             SNN._printWeight()
@@ -66,15 +69,23 @@ def train(SNN, dataX, dataY, iterNum, stdp_config, forwardTime = 1000, refreshTi
     return
 
 
-def test(SNN, dataX, forwardTime = 1):
+def test(SNN, dataX, n_iter_test = 10, forwardTime = 1):
     dataSize = dataX.shape[0]
     idxList = np.array(range(dataSize), dtype = np.int8)
-    np.random.shuffle(idxList)
-    for j in range(3):
+    hit = 0
+    for j in tqdm(range(n_iter_test)):
+        np.random.shuffle(idxList)
         for idx in idxList:
+            SNN.reset()
             print(' %d, %d: ' %(dataX[idx, 0].astype(np.int8), dataX[idx, 1].astype(np.int8)), end = '')
             spike = SNN.batchedPredict(dataX[idx], forwardTime)
-            print('%.2f' %(np.sum(spike).astype(np.float16)))
+            prediction = np.sum(spike) > 0
+            print(prediction)
+            if prediction == (dataX[idx, 0].astype(np.bool) ^ dataX[idx, 1].astype(np.bool)):
+                hit += 1
+            #print('%.2f' %(np.sum(spike).astype(np.float16)))
+            #plotSpike(spike, dt = 1e-3)
+    print('Accuracy: %.2f%%' %(100.0 * hit / n_iter_test / 4))
     return
 
 
@@ -96,12 +107,11 @@ if __name__ == "__main__":
     }
     input_neuron = poissonInput(size = 2)
     dataX, dataY = getDataset(3)
-    time = 1
     dt = 1e-3
-    learningRate = 10
-    stepNum = int(time/dt)
-    SNN = getNetwork(learningRate = learningRate, dt = dt)
-    SNN._printWeight()
+    learningRate = 1
+    SNN = getNetwork(learningRate = learningRate, dt = dt, fMin = fMin, fMax = fMax, capitance = capitance, resistance = resistance,
+                    vThreshold = vThreshold, vRest = vRest, minSupervisedCurrent = minSupervisedCurrent, maxSupervisedCurrent =
+                     maxSupervisedCurrent)
     print('---- START TRAINING ----')
     train(SNN, dataX, dataY, 30, stdp_config, forwardTime=2, refreshTime=1)
     SNN._printWeight()
