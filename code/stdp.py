@@ -5,7 +5,6 @@ from network import supervised
 from xorBCM import getDataset
 from utility import plotSpike
 import random
-from tqdm import tqdm
 
 
 def getNetwork(fMin = 50, fMax = 250, capitance = 1, resistance = 1, vThreshold = 0.7, vRest = 0, tau = 20, minSupervisedCurrent =
@@ -49,7 +48,7 @@ def afterTrain(SNN, fMin = 20, fMax = 100, capitance = 1, resistance = 1, vThres
 def train(SNN, dataX, dataY, iterNum, stdp_config, forwardTime = 1000, refreshTime = 1000):
     dataSize = dataX.shape[0]
     idxList = np.array(range(dataSize), dtype = np.int8)
-    for iters in tqdm(range(iterNum)):
+    for iters in range(iterNum):
         try:
             print('iter %d: ' %iters)
             np.random.shuffle(idxList)
@@ -73,18 +72,19 @@ def test(SNN, dataX, n_iter_test = 10, forwardTime = 1):
     dataSize = dataX.shape[0]
     idxList = np.array(range(dataSize), dtype = np.int8)
     hit = 0
-    for j in tqdm(range(n_iter_test)):
+    testResult = [[None for i in range(dataSize)] for j in range(n_iter_test)]
+    for j in range(n_iter_test):
         np.random.shuffle(idxList)
         for idx in idxList:
             SNN.reset()
             print(' %d, %d: ' %(dataX[idx, 0].astype(np.int8), dataX[idx, 1].astype(np.int8)), end = '')
             spike = SNN.batchedPredict(dataX[idx], forwardTime)
-            prediction = np.sum(spike) > 0
-            print(prediction)
-            if prediction == (dataX[idx, 0].astype(np.bool) ^ dataX[idx, 1].astype(np.bool)):
-                hit += 1
-            #print('%.2f' %(np.sum(spike).astype(np.float16)))
-            #plotSpike(spike, dt = 1e-3)
+            print('%.2f' %(np.sum(spike).astype(np.float16)))
+            rate = np.sum(spike, axis = 0).astype(np.float32) / forwardTime * 1000
+            print(rate)
+            testResult[iters][idx] = rate
+            if plot is True:
+                plotSpikeList(SNN.spikeListList, legend = legend, fn_save = fn_save + '.input%d.iter%d' %(idx, iters))
     print('Accuracy: %.2f%%' %(100.0 * hit / n_iter_test / 4))
     return
 
@@ -109,9 +109,7 @@ if __name__ == "__main__":
     dataX, dataY = getDataset(3)
     dt = 1e-3
     learningRate = 1
-    SNN = getNetwork(learningRate = learningRate, dt = dt, fMin = fMin, fMax = fMax, capitance = capitance, resistance = resistance,
-                    vThreshold = vThreshold, vRest = vRest, minSupervisedCurrent = minSupervisedCurrent, maxSupervisedCurrent =
-                     maxSupervisedCurrent)
+    SNN = getNetwork(learningRate = learningRate, dt = dt)
     print('---- START TRAINING ----')
     train(SNN, dataX, dataY, 30, stdp_config, forwardTime=2, refreshTime=1)
     SNN._printWeight()
